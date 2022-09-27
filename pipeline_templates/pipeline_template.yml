@@ -1,0 +1,214 @@
+parameters:
+  - name: projectName
+    displayName: Required. The name of the project
+    type: string
+
+  - name: workingDirectory
+    displayName: Required. Working Directory or project directory
+    type: string
+
+  - name: buildType
+    displayName: Required. Valid values are java, nodejs, dotnet, dotnetcore
+    type: string
+    values:
+      - java
+      - nodejs
+      - dotnet
+      - dotnetcore
+
+  - name: javaBuildTool
+    displayName: Optional. Valid values are gradle or maven. Defaults to gradle
+    type: string
+    default: 'gradle'
+    values:
+      - gradle
+      - maven
+
+  - name: jdkVersion
+    displayName: Optional. The JDK version to use. Defaults to 1.11
+    type: string
+    default: '1.11'
+    values:
+      - '1.11'
+
+  - name: javaOutputJarFile
+    displayName: Required. The output path of the JAR file
+    type: string
+    default: ''
+
+  - name: dotnetCoreSDKVersion
+    displayName: Optional. The .Net Core SDK version to use. Defaults to 5.0.403
+    type: string
+    default: '5.0.403'
+
+  - name: nodeJsVersion
+    displayName: Optional. The Node JS version to use
+    type: string
+    default: '' # Default to be specified when NodeJS templates are built
+  
+  - name: dotnetProjectORSolution
+    displayName: Required if buildType is 'dotnet'. Path of the dotnet project or solution. For example, 'eShopOnWeb.sln' if the solution file is in the project root folder or 'src/PublicApi/PublicApi.csproj'
+    type: string
+    default: ''
+
+  - name: sonarProjectKey
+    displayName: Required. The Sonar Project Key
+    type: string
+
+  # - name: enableSmokeTest
+  #   displayName: Set to true or false to enable or disable Smoke tests. Defaults to false
+  #   type: boolean
+  #   default: false
+
+  # - name: enableFunctionalTest
+  #   displayName: Set to true or false to enable or disable Functional tests. Defaults to false
+  #   type: boolean
+  #   default: false
+
+  - name: beforeBuildSteps
+    displayName: Optional. Steps to execute before build steps
+    type: stepList
+    default: []
+
+  - name: afterBuildSteps
+    displayName: Optional. Steps to execute after build steps
+    type: stepList
+    default: []
+
+  - name: beforeSmokeTestSteps
+    displayName: Optional. Steps to execute before Smoke Test steps
+    type: stepList
+    default: []
+
+  - name: afterSmokeTestSteps
+    displayName: Optional. Steps to execute after Smoke Test steps
+    type: stepList
+    default: []
+
+  - name: beforeFunctionalTestSteps
+    displayName: Optional. Steps to execute before Functional Test steps
+    type: stepList
+    default: []
+
+  - name: afterFunctionalTestSteps
+    displayName: Optional. Steps to execute after Functional Test steps
+    type: stepList
+    default: []
+
+  - name: infraTerraformFolder
+    displayName: Optional. Path where terraform scripts are located
+    type: string
+    default: ''
+
+  - name: beforeBuildInfraSteps
+    displayName: Optional. Steps to execute before build infrastructure steps
+    type: stepList
+    default: []
+
+  - name: afterBuildInfraSteps
+    displayName: Optional. Steps to execute after build infrastructure steps
+    type: stepList
+    default: []
+
+  - name: dockerFilePath
+    displayName: Optional. Docker file path. For example, 'src/Web/Dockerfile'
+    type: string
+    default: ''
+  
+  - name: beforeImageBuildSteps
+    displayName: Optional. Steps to execute before image build steps
+    type: stepList
+    default: []
+
+  - name: afterImageBuildSteps
+    displayName: Optional. Steps to execute after image build steps
+    type: stepList
+    default: []
+
+stages:
+  
+  - stage: build
+    displayName: Build/Test/Scan
+
+    jobs:
+      - template: /pipeline_templates/build/build.yml
+        parameters:
+          projectName: ${{ parameters.projectName }}
+          workingDirectory: ${{ parameters.workingDirectory }}
+          buildType: ${{ parameters.buildType }}
+          javaBuildTool: ${{ parameters.javaBuildTool }}
+          jdkVersion: ${{ parameters.jdkVersion }}
+          javaOutputJarFile: ${{ parameters.javaOutputJarFile }}
+          dotnetCoreSDKVersion: ${{ parameters.dotnetCoreSDKVersion }}
+          nodeJsVersion: ${{ parameters.nodeJsVersion }}
+          dotnetProjectORSolution: ${{ parameters.dotnetProjectORSolution }}
+          sonarProjectKey: ${{ parameters.sonarProjectKey }}
+          # enableSmokeTest: ${{ parameters.enableSmokeTest }}
+          # enableFunctionalTest: ${{ parameters.enableFunctionalTest }}
+          beforeBuildSteps: ${{ parameters.beforeBuildSteps }}
+          afterBuildSteps: ${{ parameters.afterBuildSteps }}
+
+  - ${{ if ne(parameters.infraTerraformFolder, '') }}:
+    - stage: buildInfra
+      displayName: Build Infrastructure
+      dependsOn: build
+      condition: succeeded('build')
+
+      jobs:
+        - template: /pipeline_templates/infrastructure/build_infrastructure.yml
+          parameters:
+            workingDirectory: '${{ parameters.infraTerraformFolder }}'
+            projectName: ${{ parameters.projectName }}
+            beforeBuildInfraSteps: ${{ parameters.beforeBuildInfraSteps }}
+            afterBuildInfraSteps: ${{ parameters.afterBuildInfraSteps }}
+
+  # - ${{ if ne(parameters.dockerFilePath, '') }}:
+  - stage: buildImage
+    displayName: Build Image
+    dependsOn: build
+    condition: succeeded('build')
+
+    jobs:
+      - template: /pipeline_templates/build/docker/build_docker.yml
+        parameters:
+          projectName: '${{ parameters.projectName }}'
+          dockerFilePath: '${{ parameters.dockerFilePath }}'
+          beforeImageBuildSteps: ${{ parameters.beforeImageBuildSteps }}
+          afterImageBuildSteps: ${{ parameters.afterImageBuildSteps }}
+
+  - stage: smokeTest
+    displayName: Smoke Test
+    dependsOn: buildImage
+    condition: succeeded('buildImage')
+
+    jobs:
+      - template: /pipeline_templates/build/smokeTest.yml
+        parameters:
+          buildType: ${{ parameters.buildType }}
+          javaBuildTool: ${{ parameters.javaBuildTool }}
+          jdkVersion: ${{ parameters.jdkVersion }}
+          dotnetCoreSDKVersion: ${{ parameters.dotnetCoreSDKVersion }}
+          dotnetProjectORSolution: ${{ parameters.dotnetProjectORSolution }}
+          nodeJsVersion: ${{ parameters.nodeJsVersion }}
+          beforeSmokeTestSteps: ${{ parameters.beforeSmokeTestSteps }}
+          afterSmokeTestSteps: ${{ parameters.afterSmokeTestSteps }}
+
+  - stage: functionalTest
+    displayName: Functional Test
+    dependsOn: buildImage
+    condition: succeeded('buildImage')
+
+    jobs:
+      - template: /pipeline_templates/build/functionalTest.yml
+        parameters:
+          buildType: ${{ parameters.buildType }}
+          javaBuildTool: ${{ parameters.javaBuildTool }}
+          jdkVersion: ${{ parameters.jdkVersion }}
+          dotnetCoreSDKVersion: ${{ parameters.dotnetCoreSDKVersion }}
+          dotnetProjectORSolution: ${{ parameters.dotnetProjectORSolution }}
+          nodeJsVersion: ${{ parameters.nodeJsVersion }}
+          beforeFunctionalTestSteps: ${{ parameters.beforeFunctionalTestSteps }}
+          afterFunctionalTestSteps: ${{ parameters.afterFunctionalTestSteps }}
+
+  # - stage:
+  #   displayName: 'Publish Helm Chart'

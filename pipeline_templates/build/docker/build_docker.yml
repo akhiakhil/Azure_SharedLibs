@@ -1,0 +1,99 @@
+parameters:
+  - name: projectName
+    displayName: Required. Project name
+    type: string
+
+  - name: dockerFilePath
+    displayName: Required. Docker file path. For example, 'src/Web/Dockerfile'
+    type: string
+
+  - name: beforeImageBuildSteps
+    displayName: Optional. Steps to execute before image build steps
+    type: stepList
+
+  - name: afterImageBuildSteps
+    displayName: Optional. Steps to execute after image build steps
+    type: stepList
+
+jobs:
+  - job: buildImage
+    displayName: 'Build Image'
+    continueOnError: false
+
+    pool:
+      vmImage: 'ubuntu-18.04'
+
+    variables:
+      - template: /pipeline_templates/commmon/variables.yml
+
+      - name: dockerImageName
+        value: ${{ lower(replace(parameters.projectName, ' ', '-')) }}
+
+      - name: environment
+        ${{ if eq( variables['Build.Reason'], 'PullRequest') }}:
+          value: 'pr-$(System.PullRequest.PullRequestNumber)'
+        ${{ if ne( variables['Build.Reason'], 'PullRequest') }}:
+          value: $[ replace(variables['Build.SourceBranchName'], 'master', 'prod') ]
+
+    steps:
+      - template: /pipeline_templates/pipeline_steps_base.yml
+        parameters:
+          beforeProcessSteps: ${{ parameters.beforeImageBuildSteps }}
+          afterProcessSteps: ${{ parameters.afterImageBuildSteps }}
+          processSteps:
+            - template: /pipeline_templates/commmon/script.yml
+              parameters:
+                scriptsToRun: |
+                    GIT_COMMIT=$(git rev-parse --short HEAD)
+
+                    echo "GIT_COMMIT: ${GIT_COMMIT}"
+
+                    echo "##vso[task.setvariable variable=GIT_COMMIT]${GIT_COMMIT}"
+                displayName: 'Run Docker Prerequisites'
+
+            - template: /pipeline_templates/commmon/downloadApplicationArtifact.yml
+
+            - template: /pipeline_templates/commmon/script.yml
+              parameters:
+                displayName: "Contents of ArtifactStagingDirectory"
+                scriptsToRun: |
+                  ls -al "$(Build.ArtifactStagingDirectory)"
+
+            - task: ExtractFiles@1
+              inputs:
+                archiveFilePatterns: '$(Build.ArtifactStagingDirectory)/*.zip'
+                destinationFolder: '$(Build.SourcesDirectory)/artifactOutput'
+                cleanDestinationFolder: false
+                overwriteExistingFiles: true
+
+            # - template: /pipeline_templates/commmon/script.yml
+            #   parameters:
+            #     displayName: "Print Variables"
+            #     scriptsToRun: |
+            #       echo "DOCKER IMAGE: $(dockerImageName):$(environment)-$(GIT_COMMIT)"
+
+            - task: Docker@2
+              displayName: Build Docker Image
+              inputs:
+                command: build
+                Dockerfile: '${{ parameters.dockerFilePath }}'
+                buildContext: '$(Build.SourcesDirectory)'
+                repository: '${{ variables.dockerOrgName }}/$(dockerImageName)'
+                tags: '$(environment)-$(GIT_COMMIT)'
+
+            - template: /pipeline_templates/build/docker/scan_docker.yml
+              parameters:
+                imageNameWithTag: '${{ variables.dockerOrgName }}/$(dockerImageName):$(environment)-$(GIT_COMMIT)'
+
+            - task: Docker@2
+              displayName: Login to Docker Hub
+              inputs:
+                command: login
+                containerRegistry: '${{ variables.dockerHubSvc }}'
+
+            - task: Docker@2
+              displayName: Push Docker Image
+              inputs:
+                command: push
+                repository: '${{ variables.dockerOrgName }}/$(dockerImageName)'
+                tags: '$(environment)-$(GIT_COMMIT)'

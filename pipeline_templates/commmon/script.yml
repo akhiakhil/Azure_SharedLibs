@@ -1,0 +1,15 @@
+parameters:
+  - name: scriptsToRun
+    displayName: The scripts to execute
+    type: string
+    default: ''
+  
+  - name: displayName
+    displayName: The display name of the step
+    type: string
+    default: 'Custom Script'
+
+steps:
+  - bash: |
+      ${{ parameters.scriptsToRun }}
+    displayName: ${{ parameters.displayName }}

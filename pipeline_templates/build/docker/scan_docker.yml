@@ -1,0 +1,22 @@
+parameters:
+  - name: imageNameWithTag
+    displayName: Required. The image and tag name. Format 'image:f334f54'
+    type: string
+
+steps:
+  - task: Bash@3
+    displayName: Download Trivy Scanner
+    inputs:
+      targetType: 'inline'
+      script: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+  - task: Bash@3
+    displayName: Scan Docker Image
+    inputs:
+      targetType: 'inline'
+      script: |
+        trivy --exit-code 0 --severity LOW,MEDIUM,HIGH --no-progress ${{ parameters.imageNameWithTag }}
+        trivy --exit-code 0 --severity CRITICAL --no-progress ${{ parameters.imageNameWithTag }}
+
+        # Set exit code to 1 if the pipeline should fail. For test reasons the exit code is set to 0 for both tests.

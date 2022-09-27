@@ -1,0 +1,10 @@
+parameters:
+  - name: checkOutSteps
+    displayName: One or more checkout steps
+    type: stepList
+    default: []
+
+steps:
+  - ${{ each step in parameters.checkOutSteps }}:
+    - ${{ each pair in step }}:
+        ${{ pair.key }}: ${{ pair.value }}

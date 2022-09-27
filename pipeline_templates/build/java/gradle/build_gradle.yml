@@ -1,0 +1,115 @@
+parameters:  
+  - name: jdkVersion
+    displayName: The JDK version to use
+    type: string
+
+  - name: javaOutputJarFile
+    displayName: Required. The output path of the JAR file
+    type: string
+
+  # - name: enableSmokeTest
+  #   displayName: Set to true or false to enable or disable Smoke tests.
+  #   type: boolean
+
+  # - name: enableFunctionalTest
+  #   displayName: Set to true or false to enable or disable Functional tests.
+  #   type: boolean
+
+steps:
+
+  # Copy init.gradle to the project folder
+  - task: CopyFiles@2
+    displayName: 'Copy init.gradle'
+    inputs:
+      SourceFolder: '$(Build.SourcesDirectory)/azure-pipeline-library/pipeline_templates/build/java'
+      Contents: |
+        \init.gradle
+      TargetFolder: '$(workingDir)'
+      OverWrite: true
+
+  - task: Gradle@3
+    displayName: 'Gradle Build'
+    inputs:
+      workingDirectory: '$(workingDir)'
+      gradleWrapperFile: '$(workingDir)/gradlew'
+      gradleOptions: '-Xmx3072m'
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: ${{ parameters.jdkVersion }}
+      jdkArchitectureOption: 'x64'
+      publishJUnitResults: true
+      testResultsFiles: '$(workingDir)/build/test-results/test/*.xml'
+      tasks: 'build'
+      options: '--no-daemon --init-script init.gradle'
+
+  - task: Gradle@3
+    displayName: 'Sonar Scan'
+    inputs:
+      workingDirectory: '$(workingDir)'
+      gradleWrapperFile: '$(workingDir)/gradlew'
+      gradleOptions: '-Xmx3072m'
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: ${{ parameters.jdkVersion }}
+      jdkArchitectureOption: 'x64'
+      publishJUnitResults: true
+      testResultsFiles: '$(workingDir)/build/reports/jacoco/test/*.xml'
+      tasks: 'sonarqube'
+      options: '--no-daemon --init-script init.gradle --info'
+
+  - task: Gradle@3
+    displayName: 'OWASP Dependency Check'
+    inputs:
+      workingDirectory: '$(workingDir)'
+      gradleWrapperFile: '$(workingDir)/gradlew'
+      gradleOptions: '-Xmx3072m'
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: ${{ parameters.jdkVersion }}
+      jdkArchitectureOption: 'x64'
+      testRunTitle: 'Dependency Check'
+      publishJUnitResults: true
+      testResultsFiles: '$(workingDir)/build/reports/dependency-check-junit.xml'
+      tasks: 'dependencyCheckAggregate'
+      options: '--no-daemon --init-script init.gradle --stacktrace -DdependencyCheck.failBuild=true -Dcve.check.validforhours=24 -Danalyzer.central.enabled=false -Ddata.driver_name=org.postgresql.Driver -Ddata.connection_string=jdbc:postgresql://$(owaspDBHost) -Ddata.user=$(owasp-db-user) -Ddata.password=$(owasp-db-password) -Danalyzer.retirejs.enabled=false'
+
+  # - ${{ if eq(parameters.enableSmokeTest, true) }}:
+  #   - task: Gradle@3
+  #     displayName: 'Smoke Tests'
+  #     inputs:
+  #       workingDirectory: '$(workingDir)'
+  #       gradleWrapperFile: '$(workingDir)/gradlew'
+  #       gradleOptions: '-Xmx3072m'
+  #       javaHomeOption: 'JDKVersion'
+  #       jdkVersionOption: ${{ parameters.jdkVersion }}
+  #       jdkArchitectureOption: 'x64'
+  #       publishJUnitResults: false
+  #       tasks: 'smoke'
+  #       options: '--no-daemon --init-script init.gradle --rerun-tasks'
+
+  #   - ${{ if eq(parameters.enableFunctionalTest, true) }}:
+  #     - task: Gradle@3
+  #       displayName: 'Functional Tests'
+  #       inputs:
+  #         workingDirectory: '$(workingDir)'
+  #         gradleWrapperFile: '$(workingDir)/gradlew'
+  #         gradleOptions: '-Xmx3072m'
+  #         javaHomeOption: 'JDKVersion'
+  #         jdkVersionOption: ${{ parameters.jdkVersion }}
+  #         jdkArchitectureOption: 'x64'
+  #         publishJUnitResults: false
+  #         tasks: 'functional'
+  #         options: '--no-daemon --init-script init.gradle --rerun-tasks'
+
+  - task: ArchiveFiles@2
+    displayName: 'Archive Test Reports'
+    inputs:
+      rootFolderOrFile: '$(workingDir)/build/reports'
+      archiveFile: '$(Build.ArtifactStagingDirectory)/reports.zip'
+  
+  - task: PublishPipelineArtifact@1
+    displayName: 'Publish Test Reports'
+    inputs:
+      targetPath: '$(Build.ArtifactStagingDirectory)/reports.zip'
+      artifactName: TestReports
+
+  - template: /pipeline_templates/build/buildPublishArtifact.yml
+    parameters:
+      rootFolderOrFile: '$(workingDir)/${{ parameters.javaOutputJarFile }}'

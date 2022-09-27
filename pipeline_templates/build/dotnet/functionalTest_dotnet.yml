@@ -1,0 +1,7 @@
+steps:
+
+  - template: /pipeline_templates/commmon/script.yml
+    parameters:
+      scriptsToRun: |
+          echo "Dotnet functional test to be implemented"
+      displayName: 'Functional Test'

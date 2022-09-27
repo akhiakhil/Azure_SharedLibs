@@ -1,0 +1,141 @@
+parameters:
+  - name: projectName
+    displayName: Required. The name of the project
+    type: string
+
+  - name: workingDirectory
+    displayName: Required. Working Directory or project directory
+    type: string
+
+  - name: buildType
+    displayName: Required. Valid values are java, nodejs, dotnet, dotnetcore
+    type: string
+
+  - name: javaBuildTool
+    displayName: Required. Valid values are gradle or maven. Defaults to gradle
+    type: string
+    default: 'gradle'
+
+  - name: jdkVersion
+    displayName: JThe JDK version to use
+    type: string
+    default: ''
+
+  - name: javaOutputJarFile
+    displayName: Required. The output path of the JAR file
+    type: string
+
+  - name: dotnetCoreSDKVersion
+    displayName: Optional. The .Net Core SDK version to use
+    type: string
+    default: '5.0.403'
+  
+  - name: nodeJsVersion
+    displayName: Node JS version
+    type: string
+    default: ''
+
+  # - name: enableSmokeTest
+  #   displayName: Set to true or false to enable or disable Smoke tests.
+  #   type: boolean
+
+  # - name: enableFunctionalTest
+  #   displayName: Set to true or false to enable or disable Functional tests.
+  #   type: boolean
+
+  - name: dotnetProjectORSolution
+    displayName: Required. Path of the dotnet project or solution. For example 'eShopOnWeb.sln' or Web.csproj if the solution file is in the project root folder or 'src/PublicApi/PublicApi.csproj'
+    type: string
+
+  - name: sonarProjectKey
+    displayName: Required. The Sonar Project Key
+    type: string
+
+  - name: beforeBuildSteps
+    displayName: Optional. Steps to execute before build steps
+    type: stepList
+    default: []
+
+  - name: afterBuildSteps
+    displayName: Optional. Steps to execute after build steps
+    type: stepList
+    default: []
+
+jobs:
+  - job: buildJob
+    displayName: 'Build/Test/Scan'
+    continueOnError: false
+
+    pool:
+      ${{ if eq(parameters.buildType, 'java') }}:
+        vmImage: ubuntu-18.04
+      ${{ if eq(parameters.buildType, 'dotnet') }}:
+        vmImage: windows-2019
+
+    variables:
+      - template: /pipeline_templates/commmon/variables.yml
+
+      - name: workingDir
+        value: '$(Build.SourcesDirectory)/${{ parameters.workingDirectory }}'
+
+    steps:
+      - template: /pipeline_templates/pipeline_steps_base.yml
+        parameters:
+          beforeProcessSteps: ${{ parameters.beforeBuildSteps }}
+          afterProcessSteps: ${{ parameters.afterBuildSteps }}
+          processSteps:
+            - checkout: self
+              displayName: 'Checkout Application Repository'
+
+            - checkout: ${{ variables.pipelinelibraryReference }}
+              displayName: 'Checkout Pipeline Library'
+
+            - task: SonarCloudPrepare@1
+              displayName: 'Prepare analysis on SonarCloud'
+              inputs:
+                SonarCloud: '${{ variables.sonarCloudSvc }}'
+                organization: '${{ variables.sonarCloudOrg }}'
+                projectKey: '${{ parameters.sonarProjectKey }}'
+                ${{ if eq( parameters.buildType, 'java') }}:
+                  scannerMode: Other
+                ${{ if eq( parameters.buildType, 'dotnet') }}:
+                  scannerMode: CLI
+                  cofigMode: 'manual'
+                  configFile: '$(workingDir)/sonar-project.properties'
+
+            - template: /pipeline_templates/commmon/read_keyvault_secrets.yml
+              parameters:
+                serviceConnection: '${{ variables.infraServiceConnection }}'
+                keyVaultName: '${{ variables.infraKeyVaultName }}'
+                secretsFilter: 'owasp-db-user,owasp-db-password'
+
+            - ${{ if and(eq(parameters.buildType, 'java'), eq(parameters.javaBuildTool, 'gradle')) }}:
+              - template: /pipeline_templates/build/java/gradle/build_gradle.yml
+                parameters:
+                  jdkVersion: ${{ parameters.jdkVersion }}
+                  javaOutputJarFile: ${{ parameters.javaOutputJarFile }}
+                  # enableSmokeTest: ${{ parameters.enableSmokeTest }}
+                  # enableFunctionalTest: ${{ parameters.enableFunctionalTest }}
+
+            - ${{ if and(eq(parameters.buildType, 'java'), eq(parameters.javaBuildTool, 'maven')) }}:
+              - template: /pipeline_templates/build/java/maven/build_maven.yml
+                parameters:
+                  jdkVersion: ${{ parameters.jdkVersion }}
+                  # enableSmokeTest: ${{ parameters.enableSmokeTest }}
+                  # enableFunctionalTest: ${{ parameters.enableFunctionalTest }}
+
+            - ${{ if eq(parameters.buildType, 'dotnet') }}:
+              - template: /pipeline_templates/build/dotnet/build_dotnet.yml
+                parameters:
+                  projectName: ${{ parameters.projectName }}
+                  dotnetCoreSDKVersion: ${{ parameters.dotnetCoreSDKVersion }}
+                  dotnetProjectORSolution: ${{ parameters.dotnetProjectORSolution }}
+                  # enableSmokeTest: ${{ parameters.enableSmokeTest }}
+                  # enableFunctionalTest: ${{ parameters.enableFunctionalTest }}
+
+            - ${{ if eq(parameters.buildType, 'nodejs') }}:
+              - template: /pipeline_templates/build/nodejs/build_nodejs.yml
+                parameters:
+                  nodeJsVersion: ${{ parameters.nodeJsVersion }}
+                  # enableSmokeTest: ${{ parameters.enableSmokeTest }}
+                  # enableFunctionalTest: ${{ parameters.enableFunctionalTest }}

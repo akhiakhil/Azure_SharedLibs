@@ -1,0 +1,92 @@
+parameters:
+  - name: projectName
+    displayName: Required. The name of the project
+    type: string
+
+  - name: dotnetCoreSDKVersion
+    displayName: The .Net Core SDK version to use
+    type: string
+
+  - name: dotnetProjectORSolution
+    displayName: Required. Path of the dotnet project or solution. For example 'eShopOnWeb.sln' if the solution file is in the project root folder or 'src/PublicApi/PublicApi.csproj'
+    type: string
+
+  # - name: enableSmokeTest
+  #   displayName: Set to true or false to enable or disable Smoke tests.
+  #   type: boolean
+
+  # - name: enableFunctionalTest
+  #   displayName: Set to true or false to enable or disable Functional tests.
+  #   type: boolean
+
+steps:
+  - task: UseDotNet@2
+    displayName: 'Use .NET ${{ parameters.dotnetCoreSDKVersion }}'
+    inputs:
+      packageType: sdk
+      version: '${{ parameters.dotnetCoreSDKVersion }}'
+      installationPath: $(Agent.ToolsDirectory)/dotnet
+
+  - task: DotNetCoreCLI@2
+    displayName: 'dotnet restore'
+    inputs:
+      command: restore
+      projects: '$(workingDir)/${{ parameters.dotnetProjectORSolution }}'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'dotnet build'
+    inputs:
+      command: build
+      projects: '$(workingDir)/${{ parameters.dotnetProjectORSolution }}'
+      arguments: '--configuration Release'
+
+  - task: DotNetCoreCLI@2
+    displayName: 'dotnet test'
+    inputs:
+      command: test
+      projects: '$(workingDir)/${{ parameters.dotnetProjectORSolution }}'
+      arguments: '--configuration Release --collect "Code coverage"'
+      publishTestResults: true
+
+  - task: SonarCloudAnalyze@1
+    displayName: 'Sonar Scan'
+
+  - task: SonarQubePublish@5
+    displayName: 'Publish Sonar Quality Gate Result'
+    inputs:
+      pollingTimeoutSec: '300'
+  
+  - task: dependency-check-build-task@6
+    displayName: 'OWASP Dependency Check'
+    inputs:
+      projectName: '${{ parameters.projectName }}'
+      scanPath: '$(workingDir)/**/*.csproj'
+      format: JUNIT
+      failOnCVSS: 0
+      suppressionPath: '$(workingDir)/suppressions.xml'
+
+  - task: PublishTestResults@2
+    displayName: 'Publish OWASP Dependency Check Test Results'
+    inputs:
+      testResultsFiles: 'dependency-check/*junit.xml'
+      searchFolder: '$(Common.TestResultsDirectory)'
+      testRunTitle: 'Dependency Check'
+
+  - task: DotNetCoreCLI@2
+    displayName: "Publish"
+    inputs:
+      command: publish
+      projects: '$(workingDir)/${{ parameters.dotnetProjectORSolution }}'
+      arguments: '-c Release -o $(Build.ArtifactStagingDirectory)'
+      zipAfterPublish: false
+      publishWebProjects: false
+
+  # - template: /pipeline_templates/commmon/script.yml
+  #   parameters:
+  #     scriptsToRun: |
+  #       echo "$(Build.ArtifactStagingDirectory)"
+  #       ls -al "$(Build.ArtifactStagingDirectory)"
+
+  - template: /pipeline_templates/build/buildPublishArtifact.yml
+    parameters:
+      rootFolderOrFile: '$(Build.ArtifactStagingDirectory)'
