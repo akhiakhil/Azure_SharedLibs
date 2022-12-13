@@ -43,7 +43,7 @@ jobs:
     - name: Build with Maven
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: mvn -v && mvn -B package --file pom.xml sonar:sonar -Dsonar.projectKey=coding-casters_githubactions -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=${{ secrets.SONARTOKEN }}
+      run: mvn -v && mvn -B package pom.xml sonar:sonar -Dsonar.projectKey=coding-casters_githubactions -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=${{ secrets.SONARTOKEN }}
 
     - name: Target
       uses: actions/upload-artifact@v2
