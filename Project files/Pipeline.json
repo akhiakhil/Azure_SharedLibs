@@ -1,0 +1,243 @@
+{
+  "productName": "serviceName", 
+   "application-type": "aks",
+   "platformProject": "service", 
+   "default-emails": [],
+   "approval-override-group":"", 
+   "imageDir": "service-dev", 
+   "atlas-id": "APP-XXX",
+   "artifactType": "JAVA",
+   "artifactory-credential-id": "artifactory-userid",
+   "stages" : {
+        "maven-build" : {
+           "ci-environment": "dev",
+           "maven-version" : "maven-3.5.2", 
+           "artifact-directory":"target",
+           "maven-settings":"", 
+           "java-library":true,
+           "app-extension": "war",
+           "module-name": "war", 
+           "test-result-xml":"**/surefire-reports/TEST- *.xml",
+           "skip-test-flag": false, 
+           "sonar": true, 
+           "whiteHat": false,
+           "clover": false, 
+           "cobertura": false,
+           "jacoco": true, 
+           "Jacoco-report-path": "war/target/site/jacoco/Jacoco.xml" 
+           "html-reports":{ 
+                "pipeline-coverage-report":{
+                "report-dir":"target/site/clover/",
+                "html-file":"index.html"
+             }
+        },
+        "Sonar-exclusions":[
+                   "**/**Test.java*","**/prototypes/**","**/health/*.java","**/test-suite/ ","**/dto/** ","**/dmcjunits/**","**/*test/'",***/parser/                    ","**/exception/"","**/transformer/*.java","**/util/**","**/*Controller.java","**/PhotoServiceWsAdaptor.java", "**/Digital                     MembershipCardService.java"
+             ],              
+        "sonar-coverage-exclusions":[
+                  "**/**Test.java**", "**/health/.java", "**/prototypes/**","**/rules-core/*.java","**/rules-common/* java". "**/config/ java", "**/rule/ java",                          "**/exception/"java","**/filter/ java","**/common/ gava","**/app/ java","48/parallelize/l.java ","**/util/                                     java","**/**Application.java**","**/**ApplicationConfig.java**","**/**ContextPathCustomizer.java**","**/**Callback.java**","**/**Configu ration.java                   "," Constants.java ","**/**Util.java**","**/**PhotoServiceSoapHandler.java ","**/**WSSecurityUsername TokenHandler.java**""**/**Co                                     rrelationIdHeaderHandler.java.,*/*ServiceMetadataRequestHandler.java**","*/**UserIdentifier Service Request.java ","**/**PhotoServiceException.j                       ava**", "**/test-suite/ ","**/*.dto/**""*/dmc-junits/ ","**/*test/**""**/Digital MembershipCard Service.java"
+              ]
+  },
+ "imageBuild": {
+     "imageSecurity Policy" : "critical"
+     "aksDeploy":{
+     "helmTemplateVersion": "1.19.0", 
+     "saveDeployment":false, 
+     "helmArtifactoryRepoUrl": "https:/artifactory", 
+     "configRepoUrl":"https://github.service-config",
+     "configVersion": "1.0.12 -SNAPSHOT",
+     "deployEnvironments":
+               "dev":{ 
+                    "subscriptionId": "xxxxxxx-xxxx-dev-01",
+                     "resourceGroup": "xxxxxxx-xxxx-dev-01", 
+                     "clusterName": "xxxxxxx-xxxx-dev-01", 
+                     "namespace": "xxxxxxx-xxxx-dev-01",
+                     "tlscertupload":false,
+                     "projectconfigInfo": {
+                           "serviceName":"service",
+                            "profile":"xxxxxxx-xx-dev", 
+                            "label":"master", 
+                            "passEncryptFlag":false, 
+                            "configRefreshFlag":true,
+                            "releaseComments":"dev release",
+                            "configJSONCredentialsID": "aks-azure-projectxxxxx-memb-nonprod"
+                         }
+
+               "qa":{
+                   "subscriptionId": "xxxxxxx-xxxx-qa-01",
+                   "resourceGroup": "xxxxxxx-xxxx-qa-01", 
+                   "clusterName": "xxxxxxx-xxxx-qa-01", 
+                   "namespace": "xxxxxxx-xxxx-qa-01-memb-qa", 
+                   "tlscertupload": true, 
+                   "projectconfigInfo":{
+                            "serviceName":"service",
+                            "profile":"xxxxx-xx-qa", 
+                            "label":"master",
+                            "passEncryptFlag":false, 
+                            "configRefreshFlag":true,
+                            "releaseComments":"qarelease",
+                            "configJSONCredentialsID": "aks-azure-projectxxxxx-memb-nonprod"
+                         }
+                   },
+
+               "uat":{
+                   "subscriptionId": "",
+                   "resourceGroup": "", 
+                   "clusterName": "", 
+                   "namespace": "", 
+                   "tlscertupload": true, 
+                   "projectconfigInfo":{
+                            "serviceName":"service",
+                            "profile":"xxxxxx-xx-uat", 
+                            "label":"master",
+                            "passEncryptFlag":false, 
+                            "configRefreshFlag":true,
+                            "releaseComments":"uat release",
+                            "configJSONCredentialsID": "aks-azure-projectxxxxx-memb-nonprod"
+                         }
+                   },
+ 
+               "prod":{
+                   "subscriptionId": "x",
+                   "resourceGroup": "x", 
+                   "clusterName": "x", 
+                   "namespace": "x", 
+                   "tlscertupload": true, 
+                   "projectconfigInfo":{
+                            "serviceName":"service",
+                            "profile":"xxxxxx-xx-prod", 
+                            "label":"release(_)dmcglobalconfig",
+                            "passEncryptFlag":false, 
+                            "configRefreshFlag":true,
+                            "releaseComments":"prod release",
+                            "configJSONCredentialsID": "aks-azure-projectxxxxx-memb-prod"
+                         }
+                   },
+                   
+                "dr":{
+                   "subscriptionId": "x",
+                   "resourceGroup": "x", 
+                   "clusterName": "x", 
+                   "namespace": "x", 
+                   "tlscertupload": true, 
+                   "projectconfigInfo":{
+                            "serviceName":"dmc",
+                            "profile":"service-vl-prod", 
+                            "label":"release(_)dmcglobalconfig",
+                            "passEncryptFlag":false, 
+                            "configRefreshFlag":true,
+                            "releaseComments":"dr release",
+                            "configJSONCredentialsID": "aks-azure-projectxxxxx-memb-prod"
+                         }
+                   },
+        
+                "perf":{
+                   "subscriptionId": "x1",
+                   "resourceGroup": "x01", 
+                   "clusterName": "x81", 
+                   "namespace": "xPerf", 
+                   "tlscertupload": true, 
+                   "projectconfigInfo":{
+                            "serviceName":"dmc",
+                            "profile":"x-uat", 
+                            "label":"master",
+                            "passEncryptFlag":false, 
+                            "configRefreshFlag":true,
+                            "releaseComments":"perf release",
+                            "configJSONCredentialsID": "aks-azure-projectxxxxxx-memb-prod"
+                         }
+                   }
+          }
+         },
+         "smoke-test": {
+            "test-suite-dir": "test-suite" 
+            "test-data-repo-url":"https://github.project/service-test-config",
+            "test-data-repo-branch": "release/az-xxxxxx", 
+            "test-exec-dir":"test-suite",
+            "test-framework":"soapui",
+            "test-report-url": "test-suite/target/test-output",
+            "test-config":{
+               "dev" : {
+                    "test-env-name": "dev",
+                    "test-suite-xml": "test-suite/config/run_tests_smokesuite.xml",
+                    "maven-args": ""
+                 },
+      
+               "qa" : {
+                    "test-env-name": "qa" 
+                    "test-suite-xml": "test-suite/config/run_tests_smokesuite.xml", 
+                    "maven-args":""
+                },
+
+               "uat" : {
+                    "test-env-name": "uat"
+                    "test-suite-xml" : "test-suite/config/run_tests_smokesuite.xml",
+                    "maven-args":""
+               },
+
+              "perf" : {
+                    "test-env-name": "perf" 
+                    "test-suite-xml": "test-suite/config/run_tests_smokesuite.xml",
+                    "maven-args": ""
+              }
+           }
+        },
+
+       "regression-test": {
+            "test-suite-dir": "test-suite", 
+            "test-data-repo-url":"https://github.project/service-test-config",
+            "test-data-repo-branch": "release/az-xxxxxx", 
+            "test-exec-dir":"test-suite",
+            "test-framework": "soapui", 
+            "test-report-url": "test-suite/target/test-output",
+            "test-config": { 
+                "dev": {
+                    "test-env-name": "dev",
+                    "test-suite-xml": "test-suite/config/run_tests.xml" 
+                    "maven-args": "" 
+                    "run-interval": "H H(-7) ***"
+                   },
+
+                "qa" : {
+                    "test-env-name": "qa",
+                    "test-suite-xml": "test-suite/config/run_tests.xml" 
+                    "maven-args": "", 
+                    "run-interval":"H H(0-7) ***"
+                  },
+
+               "uat": {
+                    "test-env-name": "uat", 
+                    "test-suite-xml": "test-suite/config/run_tests.xml",
+                    " maven-args": "",
+                    "run-interval": "H H(0-7) ***"
+                 },
+ 
+             "perf": {
+                   "test-eny-name": "perf",
+                   "test-suite-xml": "test-suite/config/run_tests.xml",
+                   " maven-args": "",
+                   "run-interval": "H H(0-7) ***"
+                 }
+               }
+         },
+
+         "whitehat-analysis" : {
+               "cron-scan-interval" : "H H(0-7) * * * ",
+               "scan-branch" : "master", 
+               "nexus-iq-app-id": "xxxx_xxxx_xxxx-xxxxxxx-xx", 
+               "jira-project": "na"
+          }
+     }
+  }
+
+
+
+
+
+
+
+
+
+
+
+

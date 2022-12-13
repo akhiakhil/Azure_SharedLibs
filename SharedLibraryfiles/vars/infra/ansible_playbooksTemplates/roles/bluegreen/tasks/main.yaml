@@ -1,0 +1,31 @@
+---
+- name: Set kubeconfig file name 
+  set_fact:
+    cnocaksconfig: "cnoeaksconfig-{{ env}}"
+
+- name: Copy config and kustomization.yaml into top level folder 
+  shell: |
+     cd ../ 
+     cp {{ cnoeaksconfig }} deployment_playbook 
+#     cp kustomization.yaml deployment_playbook
+
+- name: Set Namespace Context
+  shell: kubectl --kubeconfig={{ cnoeaksconfig }} config set-context --current --namespace={{ deployNamespace }}
+- debug: var=helmResourceFilename
+
+- name: Set deployment name
+  set_fact:
+    deploymentName: "{{ env }}-{{ appName }}-{{ appVersion }}"
+
+- name: Deploy App to Test Route 
+  import_tasks: deploy.yaml 
+  when: deployOperation=="deploy"
+
+- name: Switch Test Route to Live Route 
+  import_tasks: switch_test_to_live.yaml 
+  when: deployOperation=="switch"
+
+- name: Rollback 
+  import_tasks: rollback.yaml
+  when: deployOperation=="rollback"
+

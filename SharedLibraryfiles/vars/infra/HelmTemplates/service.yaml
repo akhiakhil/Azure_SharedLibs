@@ -1,0 +1,20 @@
+
+apiVersion: v1
+kind: Service 
+metadata:
+  name: project-cloud4java-postgres-sample-0-0-1 
+  labels:
+    app.kubernetes.io/name: Client-cloud4java-postgres-sample-0-0-1 
+    app.kubernetes.io/instance: "0.0.1"
+    helm.sh/chart: "ibm-cloud-template-0.2.0"
+spec:
+  type: Cluster IP
+  ports: 
+    - port: 80
+      target Port: http 
+      protocol: TCP
+      name: http 
+  selector:
+      app.kubernetes.io/name: Client-cloud4java-postgres-sample-0-0-1 
+      app.kubernetes.io/instance: "0.0.1"
+

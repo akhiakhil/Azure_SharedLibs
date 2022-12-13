@@ -1,0 +1,401 @@
+<?xml version="1.0" encoding=" UTF-8"?> 
+<!--
+ | Copyright 2015 Adobe Systems Incorporated
+ |
+ | Licensed under the Apache License, Version 2.0 (the "License");
+ | you may not use this file except in compliance with the License.
+ | You may obtain a copy of the License at
+ |
+ | http://www. apache.org/licenses/LICENSE-2.0
+ |
+ | Unless required by applicable law or agreed to in writing, software
+ | distributed under the License is distributed on an “AS IS" BASIS
+ | WiTHOUT WARRANTIES OR CONDITIONS OF ANY KIND, 
+ | See the License for the specific language governing permissions and
+ | limitations under the License.
+-->  
+<project xmlns="http: //maven.apache-org/POM/4.0.0" xmlnsixsi="http? //www.W3.org/2001/XMLSchema- instance”
+xsi: schemaLocation="http://maven.apache.org/POM/4.0.@ http: //maven.apache.org/maven-v4_@_@.xsd"
+   <modelVersion>4.0.0</modelVersion>
+
+   <!--  =======================================================================-->
+   <-- PARENT PROJECT DESCRIPTION                                               -->
+   <-- =========================================================================-->
+   <parent>
+   <groupid>org.kp-web</groupid>
+   <artifactId>appointment-center</artifactId>
+   <version>7.1.48</version>
+   <relativePath>../pom.xml</relativePath>
+   </parent>
+
+   
+   <!--  =======================================================================-->
+   <-- PARENT PROJECT DESCRIPTION                                               -->
+   <-- =========================================================================-->
+   <artifactId>appointment-center.ui.apps</artifactId>
+   <packaging>content-package</packaging>
+   <name>Appointment Center - UI apps</name>
+   <description>UI apps package for Appointment Center</description>
+
+   
+   <!--  =======================================================================-->
+   <-- BUILD DEFINITION                                               -->
+   <-- =========================================================================-->
+   <build>
+      <sourceDirectory>src/main/content/jer_root</sourceDirectory> 
+      <resources>
+         <!-- define the resources that will go into the package -->
+         <resource>
+            <!--
+               we want to keep some of the META-INF files and not configure
+               everything in the plugin.
+             -->
+            <directory>${basedir}/src/main/content/META-INF</directory>
+            <targetPath>. . /vault-work/META-INF</targetPath>
+        </resource>
+        <resource>
+            <directory>${basedir}/src/main/content/jer_root</directory>
+            <exeludes>
+                  <!-- exclude .vit control files in the package -->
+                  <exclude>**/.v1t</exclude>
+                  <exclude>**/.vltignore</exclude>
+                  <exclude>**/.gitignore</exclude>
+                  <exclude>**/*.iml</exclude>
+                  <exclude>**/.classpath</exclude>
+                  <exclude>**/.project</exclude>
+                  <exclude>**/.settings</exclude>
+                  <exclude>**/.DS_Store</exclude>
+                  <exclude>**/target/**</exclude>
+                  <exclude>**/pom.xml</exclude>
+            </excludes>
+        </resource>|
+     </resources>
+     <plugins>
+
+       <plugin>
+           <artifactId>maven-resources-plugin</artifactId>
+           <executions>
+           <-- workaround for KP build copying to /etc/designs/ -->
+           <execution>
+              <id>copy-ui-app-analytics-js</id>
+              <phase>generate-sources</phase>
+              <goals>
+                 <goal>copy-resources</goal>     
+              </goals>
+              <configuration>
+                <outputDirectory>${basedir}/src/main/content/3er_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-anaiytics</outputDirectory>
+                <resources>
+                    <resources>
+                        <directory>${basedir}/sre/main/content/Jer_root/ete/designs/kporg/appointment-center/clientlib-analytics</directory>
+                        <filtering>false</filtering>
+                        <includes>
+                            <include>analytics. bundle.js</inelude>
+                        </ineludes>
+                    </resource>
+                </resources>
+             </configuration>
+           </execution>
+           <execution>
+               <id> copy-ui-app-booking-confirmation</id>)
+               <phase>generate-sources</phase>
+               <goals>
+                 <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                    <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-booking-confirmation</outputDirectory>
+                    <resources>
+                      <resources>
+                        <directory>${basedir}/sre/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-booking-confirmation</directory>
+                         <filtering>false</filtering>
+                         <includes>
+                            <include>*.js</include>
+                            <include>*.css</include>
+                            <include>*.txt</include>
+                         </includes>
+                       </resource>
+                     </resources>
+               </configuration>
+             </execution>
+             <execution>
+               <id>copy-ui-app-booking-confirmation-img</id>
+               <phase>generate-sources</phaze>
+               <goals>
+                <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                  <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-booking-confirmation/images</outputDirectory>
+                    <resources>
+                      <resource>
+                        <directory>${basedir}/sre/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-booking-confirmation/assets/images</directory>
+                         <filtering>false</filtering>
+                      </resource>
+                     </resources>
+               </configuration>
+             </execution>
+             <execution>
+               <id>copy-ui-app-booking-confirmation-asset-img</id>
+               <phase>generate-sources</phase>
+               <goals>
+                <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                  <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-booking-confirmation/images</outputDirectory>
+                    <resources>
+                      <resource>
+                        <directory>${basedir}/src/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-booking-confirmation/assets/images</directory>
+                         <filtering>false</filtering>
+                      </resource>
+                     </resources>
+               </configuration>
+             </execution>
+             <execution>
+               <id>copy-ui-app-booking-confirmation-font</id>
+               <phase>generate-sources</phase>
+               <goals>
+                <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                  <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-booking-confirmation/fonts</outputDirectory>
+                    <resources>
+                      <resource>
+                        <directory>${basedir}/sre/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-booking-confirmation/assets/fonts</directory>
+                         <filtering>false</filtering>
+                      </resource>
+                     </resources>
+               </configuration>
+             </execution>
+             <execution>
+               <id> copy-ui-app-upcoming-appts</id>)
+               <phase>generate-sources</phase>
+               <goals>
+                 <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                    <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-upcoming-appts</outputDirectory>
+                    <resources>
+                      <resources>
+                        <directory>${basedir}/sre/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-upcoming-appts</directory>
+                         <filtering>false</filtering>
+                         <includes>
+                            <include>*.js</include>
+                            <include>*.css</include>
+                            <include>*.txt</include>
+                         </includes>
+                       </resource>
+                     </resources>
+               </configuration>
+             </execution>
+             <execution>
+               <id>copy-ui-app-upcoming-appts-asset-img</id>
+               <phase>generate-sources</phase>
+               <goals>
+                <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                  <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-upcoming-appts/resources/imgese</outputDirectory>
+                    <resources>
+                      <resource>
+                        <directory>${basedir}/sre/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-upcoming-appts/images</directory>
+                         <filtering>false</filtering>
+                      </resource>
+                     </resources>
+               </configuration>
+             </execution>
+             <execution>
+               <id>copy-ui-app-upcoming-appts-img</id>
+               <phase>generate-sources</phase>
+               <goals>
+                <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                  <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-upcoming-appts/resources/asset/imgese</outputDirectory>
+                    <resources>
+                      <resource>
+                        <directory>${basedir}/sre/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-upcoming-appts/asset/images</directory>
+                         <filtering>false</filtering>
+                      </resource>
+                     </resources>
+               </configuration>
+             </execution>
+             <execution>
+               <id>copy-ui-app-upcoming-appts-font</id>
+               <phase>generate-sources</phase>
+               <goals>
+                <goal>copy-resources</goal>
+               </goals>
+               <configuration>
+                  <outputDirectory>${basedir}/src/main/content/jcr_root/apps/settings/wcm/designs/kporg/appointment-center/clientlib-upcoming-appts/resources/assets/font</outputDirectory>
+                    <resources>
+                      <resource>
+                        <directory>${basedir}/sre/main/content/Jcr_root/etc/designs/kporg/appointment-center/clientlib-upcoming-appts/asset/font</directory>
+                         <filtering>false</filtering>
+                      </resource>
+                     </resources>
+               </configuration>
+             </execution>
+
+          </executions>
+       </plugin>
+
+        
+      <!--  =======================================================================-->
+      <-- PARENT PROJECT DESCRIPTION                                               -->
+      <-- =========================================================================--> 
+      <piugin>
+      <groupld>org. apache. jackrabbit</grouptd>
+      <artifactId>filevault-package-maven-plugin</artifactId>
+      <extensions>true</extensions>
+      <configuration>
+           <filterSource>src/main/content/META-INF/vault/filter.xml</filterSource>
+           <packageType>mixed</packageType>
+           <group>project</group>
+           <name>appointment-center.ui-apps</name>
+           <embeddeds>
+             <embedded>
+                <groupId>org.project.web</groupId>
+                <artifactId>appointment-center.core</artifactId>
+                <target>/apps/PROJECT/appointment-center/install</target>
+             </embedded>
+           </embeddeds>
+       <properties>
+            <cloudManagerTarget></cloudManagerTarget>>
+       </properties>
+  <validatorsSettings>
+      <Jackrabbit-filter>
+             <options>
+               <validRoot>/apps/PROJECT/appointment-center, /apps/settings /uem/ designs /kporg/appointment-center/external-style</validRoot>
+             </options>
+      </Jackrabbit-Filter>
+  </validatorsSettings>
+     </configuration>
+     </plugin>|
+     <plugin>
+     <groupId>con.day.jcr-vault</groupId>
+     <artifactId>content-package-maven-plugin</artifactId>
+     <extensionz>true</extensions>
+     <configuration>
+         <filterSource>src/main/content /NETA-INF /vault/filter.xml</filterSource>
+         <verbose>true</verbose>
+         <failonError>true</failonError>
+         <group>PROJRCT</group>
+     </configuration>
+     </plugin>
+
+     <plugin>
+         <groupId>org. apache. sling</groupid>
+         <artifactId>ht1-maven-plugin</artifactId>
+         <executions>
+            <execution>|
+               <Id>validate-ht1-scripts</id>
+               <goals>
+                   <goal>validate</goal>
+
+                </goals>
+                <phase>generate-sources</phase>
+                <configuration>
+                   <generateJavaClasses>true</generateJavaClasses>
+                   <generatedJavaClassesPrefix>org.apache. sling. scripting. sightly</generatedJavaClassesPrefix>
+                   <sourceDirectory>${project.build. sourceDirectory}</sourceDirectory>
+                   <allowedExpressionOptions>
+                      <allowedExpressionOption>essClassName</allowedExpressionOption>
+                      <allowedExpressionOption>decoration</allowedExpressionOption>
+                      <allowedExpression0ption>decorationTagName</allowedExpressionOption>
+                      <allowedExpressionOption>wenmede</allowedExpressionOption>
+                   </allowedExpressionOptions>
+               </configuration>
+            </execution>
+         </executions>
+     </plugin>
+   </plugins>
+  </build>
+
+  <!--  =======================================================================-->
+  <-- DEPENDENICS                                                              -->
+  <-- =========================================================================--> 
+  <dependencies>
+      <dependency>
+         <groupId>org.PROJECT-web</groupId>
+         <artifactId>appointment-center.core</artifactId>
+         <version>${project .version}</version>
+      </dependency>
+
+      <dependency>
+          <groupId>org.PROJECT.web</groupId>
+          <artifactId>appointment-center.ui.frontend</artifactId>
+          <version>${project.version}</version>
+          <type>zip</type>
+      </dependency>
+
+    <!-- SPA Project Core (includes hierarchy page)-->
+      <dependency>
+          <groupId>com.adobe.aem</groupld>
+          <artifactId>spa.project.core.ui.apps</artifactId>
+          <type>zip</type>
+      </dependency>
+      <dependency>
+          <groupId>com. adobe. aem</groupId>
+           <artifactId>spa.Project.core.core</artifactId>
+      </dependency>
+      <!-- <dependency>
+
+         <groupId>org.PROJECT.web</groupId>
+         <artifactId>appointment-center.ui.apps-structure</artifactid>
+         <version>${project.version}</version>
+         <type>zip</type>
+      </dependency> -->
+
+     <dependency>
+       <groupId>com.adobe.cq</groupId>
+       <artifactId>core.wem.components.core</artifactId>
+     </dependency>
+
+     <dependency>
+        <groupId>com.adobe.cq</groupld>
+        <artifactId>core.wem. components. content</artifactId>
+        <type>zip</type>
+     </dependency>
+
+     <dependency>
+          <groupId>com. adobe. cq</groupld>
+          <artifactId>core.wem. components. config</artifactId>
+         <type>zip</type>
+     </dependency>
+
+     <dependency>
+          <groupid>com.adobe.aem</groupid>
+          <artifactId>uber-jar</artifactId>
+     </dependency>
+
+     <dependency>
+          <groupId>javax. jcr</groupld>
+          <artifactId>jcr</artifactId>
+     </dependency>
+
+     <dependency>
+         <groupId>javax. servlet</groupId>
+         <artifactId>javax.servlet-api</artifactId>
+     </dependency>
+
+     <dependency>|
+        <groupld>com.day.cq.wem</groupld>
+        <artifactId>cq-wem-taglib</artifactId>
+     </dependency>
+   
+     <!-- HTL dependencies needed for the HTL Maven Plugin source code generation
+
+     <dependency>
+        <groupId?org. apache. sling</groupId>
+        <artifactId>org. apache. sling. scripting. sightly.compiler</artifactId>
+        <version>1.2.4-1.4.0</version>
+        <scope>provided</scope>
+     </dependency>
+
+     <dependency>
+         <groupId>org.apache.sling</groupId>
+         <artifactId>org. apache. sling. scripting. sightly.runtime</artifactId>
+         <version>1.2.4-1.4.0</version>
+        <scope>provided</scope>
+     </dependency>
+   </dependencies>
+ </project>
+

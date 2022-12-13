@@ -1,0 +1,21 @@
+apiVersion: extensions/v1betal 
+kind: Ingress
+metadata:
+  name: projectcloud4java-postgres-sample-0-0-1 
+  labels:
+     app.kubernetes.io/name: project-cloud4java-postgres-sample-0-0-1 
+     app.kubernetes.io/instance: "0.0.1"
+     helm.sh/chart: "ibm-cloud-template-0.2.0" 
+  annotations:
+     kubernetes.io/ingress.class: Client-aks-ingress 
+
+spec:
+ rules:
+   - host: "project-cloud4java-postgres-sample-0-0-1.10.10.116.98.nip.io" 
+     http: 
+       paths: 
+        - path: /
+          backend:
+             serviceName: project-cloud4java-postgres-sample-0-0-1 
+             servicePort: http
+

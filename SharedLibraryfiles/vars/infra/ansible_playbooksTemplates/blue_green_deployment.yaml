@@ -1,0 +1,9 @@
+---
+- name: Azure Blue Green Deployment
+  hosts: localhost 
+  gather_facts: no 
+  tasks:
+    - name: Importing Blue Green deployment role
+      import_role: 
+        name: bluegreen
+

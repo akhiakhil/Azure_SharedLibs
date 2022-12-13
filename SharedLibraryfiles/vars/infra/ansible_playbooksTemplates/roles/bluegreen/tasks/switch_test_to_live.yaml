@@ -1,0 +1,39 @@
+---
+- name: Check if any existing '-live' service 
+  shell: kubectl --kubeconfig={{ cnoeaksconfig }} get svc | grep ^{{ appName}}-live | awk '{print $1)'
+  register: existingsvc
+
+- name: Patch '-live' Service and scale down previous deployment to 0 replicas 
+  block: 
+    - name: Get previous deployment version
+      shell: kubectl --kubeconfig={{ cnoeaksconfig }} get svc {{ appName}}-live -o yaml | sed-ne '/f:spect/d' -ne '/spec :/,$ p'| grep app.kubernetes.io/name | awk '{print $2}'
+      register: oldDeployVersion
+    - debugt var=oldDeployVersion
+
+    - name: Get '-test' svc spec and create new file
+      shell: kubectl -- kubeconfig={{ cnoeaksconfig }} get svc {{ appName }}-test -o yaml | sed - ne '/f:spec:/d' -ne /spec :/,$ p' > patchsvc.yaml
+
+    - name: Remove clusterIP and patch '-live' svc
+      shell: sed -i '/clusterIP/d' patchsvc.yaml && sed -i -e "s/^[ ]*-[ ][0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\(1,3\)\.[0-9]\(1,3\}$//g" patchsvc.yaml && kubectl --kubeconfig={{ cnoeaksconfig }) patch svc {{ appName }}-live --patch "$(cat patchsvc.yaml)"
+ when : existingSvc.stdout !=""
+
+- name: Scale down previous deployment
+  shell: kubectl --kubeconfig={{ cnoeaksconfig }} scale deploy {{ oldDeployVersion.stdout }} --replicas=0
+  When: existing Svc.stdout !="" and oldDeployVersion.stdout != deploymentName
+
+- name: Create '-live' Service if not available
+  block:
+    - name: Get Service object and write to new file 
+      shell: kubectl -- kubeconfig={{ cnoeaksconfig }} get svc {{ appName }}-test -o yaml > newservice.yaml
+ 
+    - name: Remove 'test' suffix from name and apply live' service
+      shell: 'sed -zi "s/ name: {{ appName }} -test/ name {{ appName}} -live/" newservice.yaml && sed -i "/clusterIP/d" newservice.yaml && sed -i -e "s/^[ ]*- [ ][0-9]\{1,3\}\.[0-9]\(1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$//g" newservice.yaml && kubectl --kubeconfig={{ cnoeaksconfig }} apply -f newservice.yami'
+  when: existingSvc.stdout ==""
+
+- name: Get Objects
+  shell: kubecti --kubeconfig={{ cnoeaksconfig )) get all, vs 2>/dev/null | grep {{ appName }) | awk '{print $1}' | tr -d 'NAME' | xargs kubectl --kubeconfig={{ cnocaksconfig }} get
+  register: objects 
+- debuge: var=objects.stdout
+
+
+

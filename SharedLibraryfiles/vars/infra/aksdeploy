@@ -1,0 +1,606 @@
+//Deploys the application to kubernetes cluster
+import groovy.json.JsonSlurperClassic
+import groovy.json.JsonOutput
+def call(environment, jsonObj) {
+    echo '***** Preparing to deploy to AKS ******'
+    //Load constants
+    def constants = new utils.aksconstants()
+    //Load deployer utils
+    def deployerUtils = new utils.deployerutils()
+    def unstashUtils = new utils.unstashutils()
+    def configUtils = new utils.kpconfigutils()
+    def imageUtils = new utils.imageutils()
+    def serviceprvUtils = new utils.serviceprvutils()
+    def secretUtils = new utils.secretutils()
+    def helmutils = new utils.helmutils()
+    def rollbackUtils = new utils.rollbackutils()
+
+    //Validate pipeline json and target environment
+    if (jsonObj == null)
+        throw new Exception('pipeline json cannot be null for AKS deployment')
+
+    //Validate aks deploy config using Open Policy Agent
+    opaConfigResults = AKSConfigValidation ("aksDeploy", "pipeline.json", "pipeline_json_policy.json")
+    if (opaConfigResults["violations"].size() != 0) { 
+        throw new Exception(opaConfigResults["title"] + ": " + opaConfigResults["violations"])
+    }
+
+   if (jsonObj.stages == null)
+       throw new Exception('stages in pipeline json cannot be null for AKS deployment")
+   if (!environment?.trim())
+       throw new Exception('Env not specified in Jenkinsfile for creating helm resources")
+   echo 'Target deployment env: ' + environment
+
+   //Assigning productName from pipeline.json as appName
+   def appName = jsonObj.'productName'
+   if (!appName?.trim())
+       throw new Exception('productName not specified in pipeline json')
+   echo 'product Name from pipeline json: ' + appName
+
+   //Validate jsonObj.stages.'aksDeploy'
+   def deployGroup = jsonObj.stages.'aksDeploy'
+   if (deployGroup == null)
+       throw new Exception('Deployment parameters are not configured in the pipeline json')
+   echo 'deployGroup from pipeline json: ' + deployGroup
+
+   //Validate deployEnvironments 
+   def deployEnvironments = deployGroup. 'deployEnvironments'
+   if (deployEnvironments == null)
+   throw new Exception ('deployEnvironments parameters are not configured in the pipeline json')
+   echo 'deployEnvironments: ' + deployEnvironments
+
+   //Validate aks deploy eny config using Open Policy Agent 
+   deployEnv = deployEnvironments."${environment}" 
+   echo 'deployEnv: + deployEnv 
+   if (deployEnv == null) {
+       throw new Exception ('Deployment environment:' + environment + ' is not configured in the pipeline json')
+   }
+   opaEnvConfig = JsonOutput.toJson(deployEnv)
+   writeFile file: "${env.WORKSPACE}/envConfig.json", text: opaEnvConfig 
+   opa EnvResults = AKSConfigValidation("envDeploy", "${env.WORKSPACE}/envConfig.json", "pipeline_json_policy.json") 
+   if (opa EnvResults["violations"].size() != 0) {
+        throw new Exception (opa EnvResults["title"] + ": " + opaEnvResults["violations"])
+   }
+ 
+   //Validate namespace 
+   deployNamespace = deployEnv.'namespace'
+   if (!deployNamespace?.trim())
+      throw new Exception('namespace in target deployment is not configured in the pipeline json') 
+   echo 'deployNamespace = ' + deployNamespace
+
+   //Validate resourceGroup 
+   def resourceGroup = deployEnv.'resourceGroup'
+   if (!resourceGroup?.trim())
+     throw new Exception('resourceGroup not provided in deployEnv')
+
+   //Validate clusterName 
+   def clusterName = deployEnv.'clusterName'
+   if (!clusterName?.trim())
+      throw new Exception('clusterName not provided in deployEnv')
+
+   //Validate subscriptionId 
+   def subscriptionId = deployEnv.'subscriptionId'
+   if (!subscriptionId?.trim())
+      throw new Exception('subscriptionId not provided in deployEnv')
+
+   //Reading kpconfig information from pipeline json if available
+   def kpconfigJson = deployEnv. 'kpconfigInfo 
+   echo 'kpconfigInfo: ' + kpconfigIson
+
+   //Validation tlscertupload 
+   def tlscertupload = deployEnv.'tlscertupload'
+   if (tlscertupload == 'undefined' || tlscertupload == null) {
+      tlscertupload = false
+   }
+   if (tlscertupload && kpconfigJson == null)
+      throw new Exception('kpconfigJson mandatory when tlscertupload is enabled in deployEnv') 
+   echo 'tlscertupload = " + tlscertupload
+
+   //Get configured timeout for bluegreenValidation from pipelineJson 
+   (bluegreenValidationTimeOut,certsUploadTimeOut) = deployerUtils.userInputTimeouts(deployEnv)
+   echo 'bluegreenValidationTimeOut : ' + bluegreenValidationTimeOut 
+   echo 'certsUploadTimeOut: ' + certsUploadTimeOut
+
+   //************ Azure Login ********
+   sh "rm -rf azconfig" 
+   echo "Login to Azure Platform to create kubeconfig to connect to AKS cluster.."
+   deployerUtils.azlogin()
+   //************ Azure Login successful**********
+
+   //****** Kubeconfig directory, check if config file exists, remove if its present ****
+   //Creating dynamic kube config file to connect to AKS 
+   deployerUtils.createKubeConfig(subscriptionId,resourceGroup,clusterName,deployNamespace)
+   //****** Kubeconfig creation done **
+
+   //Check if prompt to delete resources before deployment is requested. 
+   def deleteResources = deployEnv. 'deleteResources'
+   if (deleteResources == 'undefined' || deleteResources == null) {
+       deleteResources = false
+   }
+   echo 'deleteResources: ' + deleteResources
+   if (deleteResources== true) {
+       deployerUtils.deletePreviousDeploymentResources(environment,appName,deployNamespace)
+   }
+
+   //Create configInput ParamsMap
+   def credentialsJsonObj = null
+   def configSecretsMap = null 
+   def configInputParamsMap = null 
+   def kpConfigGetResponse =' '
+   def kubeSecrets =[kpconfig:"",azservice:"",tlscert:""] 
+   if (kpconfigJson != null) {
+       try {
+           if (!kpconfigJson.'configJSONCredentialsID'?.trim())
+           throw new Exception('configJSONCredentialsID is not found in pipeline under kpconfigInfo section')
+           withCredentials([string(credentialsId: kpconfigJson.'configUSONCredentialsID', variable: 'SECRET')]) {
+               credentialsJsonObj = new JsonSlurperClassic().parseText(SECRET)
+           }
+           //Get config creds into a map
+           configSecretsMap = secretUtils.createConfigSecrets(kpconfigIson,credentialsIsonObj)
+           configInputParamsMap = configSecretsMap.get('configInputParams Map')
+
+       } catch (Exception e) {
+           throw new Exception('Unable to parse Jenkins credentials with id : ' + kpconfigJson.'configJsonCredentialsID' + e)
+       }
+       if (credentials Isonobj == null)
+           throw new Exception('Jenkins credentials with id configJSONCredentialsID is not found and it is mandatory')
+    }
+
+    // Retrieve imageDir
+    def project Name = jsonObj. 'imageDir'
+    if (!projectName?.trim())
+         project Name = CreateApplicationID(appName)
+    echo 'projectName: ' + project Name
+
+    //Unstash the artifactName and AppImageDetails to recover 7 + 2 stashed files 
+    try {
+        unstash 'artifactName' 
+        unstash 'AppImageDetails'
+        sh 'ls -ltra 
+      } catch (err) {
+          echo 'Info: Unable to unstash files: ' + err
+    }
+
+    //Getting artifact Type from stash. If stashed file not present, getting it from pipeline.json 
+    def artifact Type = unstashUtils.getArtifactType(jsonObj) 
+    echo 'artifactType = ' + artifactType
+
+    //Getting downloadUrl for code build artifact 
+    def buildArtifactUrl = unstashUtils.getDownloadURL(artifactType,deployGroup,appName)
+    buildArtifactUrl = ! buildArtifactUrl?.trim() ? buildArtifactUrl : buildArtifactUrl.replaceAll("\\n", "")
+
+    def unstashfiles = new utils.unstashutils()
+    def nodeArtifactURL = '' 
+    if (artifactType.equalsIgnoreCase( 'NODEJS')) {
+        nodeArtifactURL = unstashfiles.getNodeArtifactURL(deployGroup, appName) 
+        nodeArtifactURL = !nodeArtifactURL?.trim() ? nodeArtifactURL : nodeArtifactURL.replaceAll("\\n","")
+        echo 'nodeArtifactURL = ' + nodeArtifactURL 
+        buildArtifactUrl = nodeArtifactURL
+     }
+     echo 'buildArtifactUrl: ' + buildArtifactUrl
+
+     //Get Artifact properties of APP_VERSION and ARTIFACT_NAME 
+     def appVersion = ''
+     def artifactName= ''
+     def artifactPropJsonOby = deployerUtils.getArtifactProperties(buildArtifactUrl)
+     if (artifactPropJsonObj != null && artifactProp)sonObj.properties != null){
+         appVersion = artifactPropJsonObj.properties.'APP_VERSION' != null ? artifactPropJsonObj.properties.'APP_VERSION[0] : unstashUtils.getAppVersion(artifactType,deployGroup,appName)
+     echo 'appVersion from properties=' + appVersion 
+     //Getting codeArtifactName from properties. If no properties defined get from stashed file
+     artifactName = artifactPropJsonObj.properties.'ARTIFACT_NAME" != null ? artifactPropJsonObj.properties. 'ARTIFACT_NAME'[0] : unstashUtils.getArtifactName(deployGroup, appName,appVersion)
+     echo 'artifactName from properties= ' + artifactName 
+   } else {
+     //Getting appVersion from stash. If stashed file not present, creating it from pom.xml or package.json in source code.
+     appVersion = unstashutils.getAppVersion(artifactType, deployGroup, appName)
+     echo 'appVersion =' + appVersion
+     //Getting artifactName from stash. If stashed file not present, getting it from pipeline.json 
+     artifactName = unstashutils.getArtifactName(deployGroup, appName, appVersion)
+     echo 'artifactName = ' + artifactName
+   }
+
+   //Getting artifactVersion from stash. If stashed file not present, getting it from pipeline.json 
+   def artifactVersion = unstashUtils.getArtifactVersion(artifactType, deployGroup, appName) 
+   echo 'artifactVersion = ' + artifactVersion
+ 
+   //Get git commit ssha to add to version.
+   def gitcommitSsha = '' 
+   if (artifactPropJsonObJ != null && artifactPropJson0bJ.properties != null) {
+   gitcommitSsha = artifactPropJsonObj.properties. 'GIT_COMMIT_SSHA' !=null ? artifactPropJsonObj.properties. 'GIT_COMMIT_SSHA' : gitcommitSsha
+   }
+   def imageTagAppVersion = gitcommitSsha != '' && gitcommitSsha[0]?.trim() && !appVersion.contains(gitcommitSsha[0])? appVersion+'.'+gitcommitSsha[0] : appVersion
+
+   echo '***** Promoting app image if needed *****' 
+   //Check if application image already exists in target image 
+   //Image Promotion - Check based on environment ensuring image is present in corresponding artifactory image repo. 
+   def appImageRepoURL = '' 
+   try {
+   //Get Repo Url - constructing from target environment 
+   (appImageUrl,virtualAppImageUrl)= imageUtils.getAppImageRepoURL(environment, projectName, appName, imageTagAppVersion, jsonObj) 
+   appImageRepoURL = virtualAppImageUrl 
+   echo 'appImageRepoURL: ' + appImageRepoURL 
+   //Promote App Image
+   imageUtils.promoteAppImage(environment, virtualAppImageUrl, imageTagAppVersion, JsonObj) 
+   } catch (err) {
+     throw new Exception('App Image Promotion Failed: ' + err)
+   }
+
+   //Validate appImageRepoURL 
+   echo 'imageTagAppVersion for validateAppImageRepoURL:' + ImageTagAppVersion 
+   imageUtils.validateAppImageRepoURL(appImageRepoURL,imageTagAppVersion) 
+   //Getting configDir that was stashed in build stage. If the stashed file is not present then, fetching the config from Workspace 
+   unstashUtils.getConfigDir()
+
+   //Replacing the appversion from. to - ---Ex: "0.0.1 
+   appVersion = appVersion.trim()
+   def appVersion Temp = appVersion.replace('.','-')
+   echo "appVersionTemp = ' + appVersionTemp
+
+   //Concatinating the appName and appVersion Temp to assign during generating the resource helm template 
+   def metadataName = environment + '-' + appName + '-' + appVersionTemp
+   echo 'metadataName = ' + metadataName
+
+   //Process TLS and MTLS requirements for application
+   echo 'environment :' + environment
+   def (valuesYaml, valuesYamlPath) = configUtils.loadYamlFile('config/'+environment)
+
+   //OPA validation for values.yaml
+   //values YamlPath = "${WORKSPACE}/config/${environment}/values.yam]" 
+   opaValuesResults = AKSConfigValidation("valuesCheck", valuesYamlPath, "pipeline_json_policy.json")
+   if (opaValuesResults["violations"].size() != 0){
+       throw new Exception ("${environment}" + "/" + opaValuesResults["title"] + " violations: " + opaValuesResults["violations"])
+    }
+
+   // Bluegreen Deployment and Rollback 
+   def deployment Type = 'live' 
+   //Check flag in pipeline.json to see if blue-green is enabled 
+   def bluegreenEnable = (deployEnv.bluegreenEnable == 'undefined' || deployEnv.bluegreenEnable == null) ? false :deployEnv.bluegreenEnable
+
+   //If enabled from pipeline.json, checking values.yaml for atleast one live and one test route. 
+   def liveSvcName = ''
+   def testSvcName = '' 
+   def liveVsName = ''
+   def testVsName = '' 
+   def liveVsIterator = -1
+
+   //Check svc and vs inputs from values.yaml 
+   (liveSvcName, liveVsName,liveVsIterator,testSvcName,testVsName) = deployerUtils.checkVsSvcInputs(valuesYaml,appName)
+   echo 'liveSvcName: ' + liveSvcName 
+   echo 'liveVsName: ' + liveVs Name 
+   echo 'liveVsIterator: ' + liveVsIterator 
+   echo 'testSvcName: ' + testSycName 
+   echo 'testVsName: ' + testVsName
+ 
+   //Set deployment Type to test when blue-green enable true or internal service deployment with test route 
+   if(bluegreenEnable || (liveVsIterator == -1 && liveSvcName =='' && testSvcName !='')){
+    deployment Type = 'test'
+    }
+ 
+   //Get tlsEnabled, mtlsEnabled, tlsHostslist, tisClients, annotation Secret Name, ntlsSecretName from values.yaml 
+   try{
+       (tlsEnabled,mtlsEnabled,tisHostsList,tlsClients,annotationSecretName,mtlsSecretName,vsDisabled) = deployerUtils.getTLSHostsandClients(valuesYaml,appName)
+   } catch(err) {
+       throw new Exception ('Process TLS and MTLS requirements Failed: ' + err)
+   }
+   echo 'tlsEnabled: ' + tlsEnabled + ', mtlsEnabled:' + mtlsEnabled + ', annotationSecretName: ' + annotationSecretName + ', mtlsSecretName: ' + mtlsSecretName+ ', vsDisabled: '+ vsDisabled
+   echo 'tIsHostsList = ' + tlsHostslist 
+   echo "Optional: tlsClients = ' + tlsClients
+
+   //For internal apps, VS may be disabled. 
+   if(vsDisabled || testSveName == '' || liveSvcllame == ''){
+     testSvcName = appName+'-test' 
+     liveSvclame = appName+'-live'
+     echo 'vsDisabled for the app'
+   }
+ 
+   //Download Helm Charts to Apply 
+   def helmResourceFilename= ''
+   def helmTemplate Version = deployGroup. 'helmTemplateVersion' 
+   def helmdir = helmutils.downloadHelmCharts(helmTemplateVersion,environment)
+
+   //mt1sEnabled - default or ingress or vs. default - no mtls for deployment like uci and uc2. No annotation snippet needed.
+   if (mtlsEnabled == 'default' || kpconfigJson == null)
+       helmResourceFilename = helmUtils.applyHelmCharts(jsonObj, environment, helmDir, artifactPropJsonObj, appImageRepoURL, project Name, appName,appVersion, imageTagAppVersion,              mulsEnabled,mtlsSecretName, annotationSecretName, null,valuesYaml,valuesYam Path,constants, bluegreenEnable,deployment Type, liveSvcName,           testSycName,liveVsIterator,buildArtifactUrl,deployNamespace)
+   //******** Getting kpconfig information from the JSON if available ******
+   def createConfigSecret Cmd = null
+   def configkubeSecretName = null 
+   def tlsSecretName = null
+   def annotationSnippet =''
+   if (kpconfigjson != null) {
+        //Perform KPConfig Operations 
+        configUtils.performKPConfigOperations(kpconfigIson,configInputParamsMap) 
+        //Get annotationSnippet from KPConfig Get call 
+        if (mtlsEnabled != "default') {
+            generateAnnotationSnippet = true 
+            //Create annotations needed for helmResources 
+            echo '***** MTLS enabled.Creating annotationSnippet******'
+            //KPConfig GET call 
+            kpConfigGetResponse = configutils.getResponseFromHttp(configInputParamsMap) 
+            try{
+                 annotationSnippet - TLSSecrets (mtlsEnabled, environment, tisHostslist, tisClients, generateAnnotationSnippet, kpConfigGetResponse, tiscertupload,                                                            configInputParamsMap,certsUploadTimeOut)
+                 echo 'annotationSnippet ='+ annotationSnippet
+            }catch(err) {
+            throw new Exception("Error in TLSSecrets setting mtls fingerprint snippet for clients. ' + err)
+            helmResourceFilename - helmUtils.applyHeImCharts(jsonOby,environment,helmdir,artifactPropJsonObs,appImageRepoURL,projectName,appName,appVersionimageTagAppVersion,                                             mtlsEnabled, mtsSecretName, annotationSecret Name,annotationSnippet,valuesYaml,valuesYamlPath,constants,bluegreenEnable,deploymentType,liveSvcName,                                             testSvcName,liveVsIterator,buildArtifactUri,deployNamespace)
+        } //Get annotationSnippet from Config call ended
+
+       /*Check secret creation flags from pipeline.json - kpConfig, tlsCerts, azServices. Default value is false, If flags true, means secrets already created in env.
+        "skipSecretCreation":{
+        "kpConfig":true,
+        "azServices":true,
+        "tisCerts":true
+       } */
+
+       def secretsCreation = null 
+       secretsCreation = deployEnv.'skipSecretCreation'
+       echo 'skip secrets Creation: ' + secretsCreation
+
+       def skipKPConfigSecretFlag = false 
+       if (secretsCreation != null && secretsCreation.'kpConfig' != null) {
+           skipKPConfigSecretFlag = secretsCreation. 'kpConfig'
+       } 
+       //Create kube secret create command into a map 
+       def configSecretCmdName = secretUtils.configkubeSecretCmd (environment,kpconfigJson,configSecretsMap) 
+       echo 'configSecretCmdHane: ' + configSecretCmdName
+
+       //If kpConfirSecretFlag enabled, means secret exists in env. Skip recreating secret. Throw error if secret not found.
+       if (skipKPConfigSecretFlag) {
+          echo "Skip kpConfig Secret Flag is enabled so, checking for secret in " + deployNamespace 
+          //throw error if secret not found in namespace 
+          secretUtils.checkSecret(configSecret CmdName, deployNamespace)
+          //Enhancement - To add User input to terminate or proceed with recreating secrets from kpconfig values. 
+       } else {
+           echo 'Skip kpConfig Secret Flag is disabled, creating secret in.' + deployNamespace 
+           //Create kpconfig kube secret in namespace 
+           try{
+               echo 'Recreate secret ..'
+               configKubeSecretName = secretUtils.createKPConfigKubeSecret(configSecretCmdName,deployNamespace) 
+               echo 'configKubeSecretName: ' + configKubeSecretName
+               kubeSecrets. kpconfig = configKubeSecretName 
+           }catch(err) {
+               echo 'KPConfig secret creation failed.'
+               throw new Exception("Error in create PConfigkubeSecret. ' + err)
+           }
+      }
+
+      //Provision Azure Services - Create wrapper json to pass to AzureServiceDeployer 
+      def app_azure_services = deployEnv. 'azureServices'
+      def project = jsonObj. 'platformProject'
+      def skipAZServicesSecretFlag = false
+      if (secretsCreation ! = null && secretsCreation. 'azServices' != null){
+         skipazServicesSecretFlag = secretsCreation.'azServices'
+         echo 'skipAZServicesSecretFlag: ' + skipAZServicesSecretFlag
+      }
+      try{
+          azSecrets = serviceprvutils.provisionAzureServices(app_azure_services,project,environment,kpconfigIson,configInputParamsMap,'config/'+environment,skipAZServicesSecretFlag, deployNamespace)
+          kubeSecrets.azservice = azSecrets 
+      }catch(err) {
+         echo 'Service secrets creation failed.'
+         throw new Exception('Error in provisionAzure Services. ' + err)
+      }
+
+      def skipTLSCertsSecretFlag = false 
+      if (secretsCreation != null && secretsCreation. 'tlsCerts' != null){
+           skipTL SCertsSecretFlag = secretsCreation. 'tlsCerts'
+           echo 'SKTLSCertsSecretFlag: ' + skipTLSCertsSecretFlag
+      }
+
+      //Create TLS Secrets
+      try {
+         if (tlsEnabled) {
+         def mtlsprocessed = false 
+             for (tlsHosts in tlsHostslist) {
+                 echo 'Creating tlssecret for ' + tisHosts
+                 tlsSecrets= secretUtils.createTLSSecrets(tisEnabled,mtlsEnabled,environment,tisHosts,tisClients,kpConfigGetResponse,tlscertupload,configInputParamsMap,mtlsSecretName, mtlsprocessed,certsUploadTimeOut,                       skipTLSC ertsSecretFlag, deploy lamespace)
+                 mtlsprocessed = true
+              }
+              echo 'TLS secrets creation successful. ' + tlsSecrets
+              kubeSecrets.tlscert = tlsSecrets 
+        } else{
+            echo "TLS secret creation skipped..."
+          }  
+        }catch(err) {
+            echo TLS secrets creation failed.
+             throw new Exception("Error in create TLSSecrets. ' + err)
+        }
+
+       echo 'kube Secrets = ' + kube Secrets
+    } //KPConfig block ended
+
+    //Preparing for bluegreen deployment, extracting individual kube resources from generated helm resources file.
+    echo 'Splitting helmResourceFilename to separate yaml files based on resource kind'
+    sh returnStdout: true, script: 'awk \'/kind:/{close(file);file=$NF\".yaml\"} file!=\"\" && !/^--/{print> (file)}\'' + helmResourceFilename
+
+    //Compare service name from virtual server to service name created for the app
+    deployerUtils.checkVsinEnv(liveVsName,testVsName,liveSycName,testSvcName, deployNamespace)
+
+    //Get current state of AKS, check if previous deployment exists from liveSvcName. Get previousVersion, replicaCountForLive and previousDeploymentName.
+    def previousVersion ='' 
+    def replicaCountForLive ='' 
+    def previousDeploymentName=''
+    if(bluegreenEnable) {
+         echo 'liveSvcName for getPreviousDeploymentInfo: ' + liveSvcName
+        (previous version, replicaCountForLive,previousDeploymentName) = rollbackUtils.getPreviousDeploymentInfo(liveSvcName.trim(), deployNamespace)
+        echo 'previousVersion of application: ' + previousVersion
+        echo 'replicaCountForLive for previous deployment: ' + replicaCountForLive
+        echo 'previousDeploymentName: ' + previousDeploymentName
+    }
+ 
+    echo '***** Deploying to AKS ******'
+    //Deploying the Application to cluster 
+    sh 'kubectl --kubeconfig cnoeaksconfig apply -f ' + helmResourceFilename + ' --recursive -n ' + deployNamespace
+    //Checking the deployments
+    sh 'kubectl --kubeconfig cnoeaksconfig get deployments -n ' + deployNamespace
+    //Checking pods after deployment 
+    sh 'kubectl --kubeconfig cnoeaksconfig get pods -n ' + deployNamespace 
+    //Checking svc after deployment
+    sh 'kubectl --kubeconfig cnoeaksconfig get service -n ' + deployNamespace
+
+    //Blue-green processing. Test route deployed. 
+    if (bluegreenEnable) {
+        echo 'deleteResources: ' + deleteResources 
+        try {
+            echo 'bluegreenValidationTimeOut Test route Validate : ' + bluegreenValidationTimeOut 
+            // user input - bluegreenEnable - proceed/abort - 15mints 
+            echo '***** Test route deployed. Validate and proceed **** '
+            timeout(time: bluegreenValidationTimeOut, unit: "MINUTES') {
+               bluegreenUserInput = input(
+                   message: 'Validate application with test route. Proceed with live/blue deployment?', 
+                   parameters: ([
+                      [$class: 'ChoiceParameterDefinition',
+                          choices: ['Deploy live/blue service', 'Rollback deployment'].join('\n'),
+                          name: 'Select choices to "Proceed".'
+                      ]
+                  ])
+               )
+         }
+         echo '******** bluegreenUser Input - proceed with blue-green deployment -' + bluegreenUserInput 
+         if (bluegreenUserInput == 'Deploy live/blue service') {
+
+             //Creating liveResourcesMap 
+             def liveResourcesMap = [: ] 
+             def svcName = "${appName}-live"
+             if (liveSvc Name == null || liveSvcName == '')
+                liveSvcName = svcName 
+             echo '***** creating liveResourcesMap *****'
+             echo 'liveSvcName: ' + liveSvcName 
+             liveResourcesMap.put('name', appName) 
+             def imageMap = [containerPort: valuesYaml.image.containerPort, tag: appVersion]
+             liveResourcesMap.put('image', imageMap) 
+             def serviceMap = [name: liveSvcName, port: valuesYaml.service.port, targetPort: values Yaml.service.targetPort]
+             liveResourcesMap.put('service', serviceMap)
+
+             //Removing file to avoid - java.nio.file.FileAlreadyExistsException 
+             sh 'rm -rf liveService.yaml' 
+             writeYaml file: 'liveService.yaml', data: liveResourcesMap
+             def liveServiceYaml = readYaml file: 'liveService.yaml' 
+             sh "cat liveService.yaml"
+
+             //Generate Helm Resources
+             def liveResourcesFilename = helmutils.applyHelmChartsLiveSvc(environment, helmdir, appName, appVersion, mtlsEnabled, ntlsSecretName, null, liveSvcName, deployNamespace)
+             //Create live route, apply liveResourcesFilename
+             try {
+                    //Apply new resources
+                    sh 'kubectl --kubeconfig cnoeaksconfig apply -f ' + liveResourcesFilename + ' --recursive -n ' + deployNamespace
+
+                    //Scale down the pods of previous deployment 
+                    if(previousDeploymentName!='' && appVersion != previousVersion) 
+                    //check is the previous deployment is exists in the env then, scale down the deployment for blue-green
+                       try{
+                           sh 'kubectl --kubeconfig cnoeaksconfig get deployments ' + previousDeploymentName + ' -n ' + deployNamespace
+                           sh 'kubectl --kubeconfig cnoeaksconfig scale deployment ' +previousDeploymentName + ' --replica=0 -n ' + deployNamespace
+                       } catch (e) {
+                           echo "No deployment ${previousDeploymentName} is found in deployNamespace ${deployNamespace}."
+                       }
+                  echo '***** Live service deployed. Validate live application *****'
+                  //Give option to delete test route and keep green route for app traffic
+                  timeout(time: bluegreenValidationTimeOut, unit: 'MINUTES') { 
+                     liveValidationUserInput = input(
+                         message: 'Live service deployed successfully. Validate live application.',
+                         parameters: ([ 
+                             [$class: 'ChoiceParameterDefinition',
+                                 choices: ['Live service validation successful', 'Rollback deployment'].join('\n'), 
+                                 name: 'Select choices with "Proceed".',
+                             ]
+                          ])
+                      )
+                   }
+
+                   echo 'validationSuccessUserInput - proceed with blue-green deployment = ' + liveValidationUserInput
+                   // If live route validated, end deployment. Else rollback. 
+                   if (liveValidationUserInput == 'Live service validation successful') {
+                       echo '**** Live service validation successful ****'
+                       echo "Proceeding to delete test route ${testVsName}"
+                       deployerUtils.deleteTestRoute(mtlsEnabled,deployNamespace,testVsName) 
+                   } else {
+                       echo '**** Live service validation failed. Rollback deployment started. '
+                       /* Rollback steps - new deployment vs previous deployment exists in env
+                            - First time deployment - delete deployment, svc and vs. 
+                            - Previous deployment exists
+                               1. delete current deployment 
+                               2. point live sve to previous deployment
+                               3. scale up previous deployment
+                               4. deleteResources true - delete test svc.
+                       */
+                       echo 'rollback live and test resources'
+                       echo 'previousVersion: ' + previousVersion 
+                       echo 'replicaCountForLive: ' + replicaCountForLive
+                       echo 'previousDeploymentName: ' + previousDeploymentName
+                       echo 'appVersion : ' + appVersion
+                       if(previousVersion!='' && previousVersion!=appVersion) {
+                          echo 'rollback live service to previous deployment'
+                          //Rollback to point the live service to previous deployment
+                          rollbackUtils.rollbackServicetoPreviousDeployment(environment,helmDir,appName, previousDeployment Name, previous version, values Yaml, liveSvcName, deployNamespace)
+                          //Scale Up previous deployment 
+                          rollbackUtils.scaleUpPreviousDeployment(replicaCountForLive, previousDeploymentName,deployNamespace)
+                       }
+                       //Delete resources
+                       rollbackUtils.rollBackResources (environment,helmdir,appName,metadataName, previousversion,previousDeploymentName, liveSycName,liveVsName,testSycName,testVsName,                                    deleteResources, 'liveRollback',valuesYaml,deployNamespace)
+                       echo "As live service validation failed, proceeding to delete test route ${testVsName}"
+                       deployerUtils.deleteTestRoute(mt1sEnabled, deployNamespace, testVsName)
+                 }
+               } catch (err) {
+               //Deleting workspace pem files.
+               sh 'rm -rf *.pem'
+               sh 'rm -rf *.pfx'
+               echo "Blue green deployment failed"
+               throw new Exception('Blue green deployment failed .Please see logs. ' + err)
+             }
+          } else {
+             //USER_INPUT ='No' - If test route validation failed, end deployment.
+             echo '***** Test/Blue route validation failed. ****'
+             //Delete resources
+             rollbackUtils.rollBackResources (environment,helmDir,appName,metadataName,previousVersion,previousDeploymentName,liveSvcName,liveVsName,testSycName,testVsName,deleteResources,                           'testRollback',values Yaml, deployNamespace)
+          } 
+       } catch (err) {
+           //cleans up the workspace, in case of error to remove .pem, .yaml files created. 
+           sh 'rm -rf SWORKSPACE/*'
+           echo 'Unexpected error occurred. Please see logs. Exiting blue-green deployment flow. ' + err
+       }
+   }
+
+   //Remove kubeconfig 
+   sh'rm cnoeaksconfig' 
+   //After successful deployment, saving the generated resource helm template to artifactory using HelmArtifactSaver.groovy
+    helmUtils.saveHelmArtifacts(deployGroup,artifactType,environment,appVersion,false,null,jsonObj)
+
+   //Azure Logout, feature from azure-jenkins-shared-library. Cleans Workspace. 
+   echo '***** Logging out from Azure ******'
+   deployerUtils.azlogout() 
+}//Ended call function
+
+
+
+
+
+              
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
+

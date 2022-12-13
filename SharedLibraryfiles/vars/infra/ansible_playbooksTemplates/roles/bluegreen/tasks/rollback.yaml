@@ -1,0 +1,68 @@
+---
+- name: Check if any existing '-live' service
+  shell: kubectl --kubeconfig={{ cnoeaksconfig }} get svc {{ appName }}-live 2> /dev/null | awk '{print $1}'
+  register: existingLiveSvc
+- debug: var=existingLiveSvc.stdout
+
+- name: Check if any existing '-test' service
+  shell: kubectl -- kubeconfig={{ cnoeaksconfig }} get svc {{ appName }}-test 2> /dev/null | awk '{print $1}'
+  register: existingTestSvc 
+- debug: var=existingTestSvc.stdout
+
+- name: Get previous deployment replica count 
+  shell: kubectl --kubeconfig={{ cnocaksconfig }} get deploy {{ rollbackDeploymentName}} -o json | jq '.spec.replicas'
+  register: oldReplicas
+- debug: var=oldReplicas.stdout
+
+#very first deployment rollback scenario after deploy test - delete svc, deploy object 
+- name: Delete '-test' svc and current deployment object 
+  shell: |
+    kubectl --kubeconfig={{ cnoeaksconfig }} delete svc {{ appName }}-test
+    kubectl --kubeconfig={{ cnoeaksconfig }} delete deploy {{ deploymentName }}
+  when: existingTestSvc.stdout != "" and existingLiveSvc.stdout == ""
+
+#very first deployment rollback scenario after switch - delete svc, deploy object
+- name: Delete '-test', 'live' svc and current deployment object 
+  shell: |
+    kubectl --kubeconfig={{ cnoeaksconfig }} delete svc {{ appName }}-test
+    kubectl --kubeconfig={{ cnoeaksconfig }} delete svc {{ appName }}-live
+    kubectl --kubeconfig={{ cnoeaksconfig }} delete deploy {{ deploymentName }} 
+  when existingTestSvc.stdout != "" and existingLiveSvc.stdout !="" and rollbackDeploymentName == ""
+
+#n+1 rollback after deploy test 
+- name: Rollback after Deploy Test 
+  block: 
+    - name: Delete current deployment
+      shell: kubectl -- kubeconfig={{ cnoeaksconfig }) delete deploy ({ deployment Name }}
+
+    - name: Patch '-test' svc with rollback spec
+      shell: sed -i '/clusterIP/d' {{ rollbackSpec }} && sed -i -e "s/^[ ]*-[ ][0-9]\{1,3\)\.[0-9]\(1,3}\.[0-9]\.{1,3\}\.[0-9]\{1,3\)$//g" {{ rollback Spec }} && kubectl --kubeconfig={{ cnocaksconfig }} patch svc {{ appName }}-test --patch "$(cat {{ rollbackSpec }})"
+  when existingTestSvc.stdout != "" and existingLiveSvc.stdout !"and rollbackDeploymentName != deploymentName and rollbackDeploymentName !"" and oldReplicas.stdout != "0"
+
+#n+1 rollback after switch
+- name: Rollback after Switch
+  block:
+   - name: Get replica count
+     shell: kubectl --kubeconfig={{ cnoeaksconfig )) get deploy {{ deploymentName }) -o json | jq '.spec.replicas'
+     register: replicas
+
+  - name: Scale up previous deployment to required replicas
+    shell: kubectl --kubeconfig={{ cnoeaksconfig }} scale deploy {{ rollbackDeploymentName}} -- replicas={{ replicas.stdout }}
+  
+  - name: Patch '-test' & '-live' Svc with rollback spec 
+    Shell: |
+     sed -i '/clusterIP/d' {{ rollbackSpec }} && sed -i -e "s/^[ ]* -[ ][0-9]\(1,3\}\.[0-9]\(1,3\)\.[0-9]\{1,3\}\.[0-9]\{1,3\}$//g" {{ rollbackSpec }} && kubectl --kubeconfig={{ cnoeaksconfig }} patch svc {{ appName }}-test --patch "$(cat {{ rollback Spec }})"
+     sed -i '/clusterIP/d' {{ rollbackSpec }} && sed -i -e "s/^[ ]* -[ ][0-9]\(1,3\}\.[0-9]\(1,3\)\.[0-9]\{1,3\}\.[0-9]\{1,3\}$//g" {{ rollbackSpec }} && kubectl --kubeconfig={{ cnoeaksconfig }} patch svc {{ appName }}-live --patch "$(cat {{ rollback Spec }})"
+   
+  - name: Delete current deployment
+    shell: kubectl --kubeconfig={{ cnoeaksconfig }} delete deploy {{ deployment Name }}
+ when existingTestsvc.stdout != "" and existingLiveSvc.stdout != "" and rollbackDeploymentName != deploymentName and oldReplicas.stdout == "0"
+
+- name: Info Only - Get Deployment Log, Squad to verify Pods are up 
+  Shell: kubectl --kubeconfig=(cnoeaksconfig> get po -o json | jq -r '.items| sort_by(.metadata.creationTimestamp)[]  | [.metadata.name] | @tsv' grep {{ deployment Name }} | xargs kubectl --kubeconfig={{ cnoeaksconfig }} get po awk '{print $1}' tail -1 | xargs kubectl --kubeconfig={{ cnoeaksconfig )) logs > deployment.log
+when: rollbackDeploymentName != "" 
+ignore_errors: yes
+
+
+
+

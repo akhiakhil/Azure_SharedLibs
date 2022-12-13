@@ -1,0 +1,117 @@
+---
+# This values.yaml file is used to create the required manifests that support deployment in the aks cluster.
+
+# This section describes the application deployment
+replicaCount: 1
+name: xxxxxxxxxxxxx
+labels:
+  # ----App Owner NUID----
+  app.kubernetes.io/managed-by-NUID: xxxxx
+
+# This section describes where to pick up the image for your application and it's version (tag)
+# label section is only required if app is "ext and will have a route assigned 
+# The container port should be the same as set in the Dockerfile and may not need to be exposed to users if we adopt convention
+image: 
+   repository: docker-qa-local.devopsrepo.kp.org/cdo-xx-org/ehpe-member-transition-bff
+   pullPolicy: IfNotPresent 
+   labels:
+      app: frontend-or-api 
+   containerPort: 8080
+
+# Add any variables required for the application in the section below.
+# These will be injected into the running pod for application useage.
+env: 
+  - name : LOG_LEVEL
+    value: "error"
+
+# This section defines the liveness and readiness probes for your application. 
+# Readiness probe is required to be enabled, Liveness probe is recommended but not required. 
+# Recommanded mapping: liveness probe maps to existing CF liveness probe URL / readiness probe maps to existing /health URL
+readinessProbe:
+  enabled: true 
+  initialDelaySeconds : 10
+  periodSeconds: 10 
+  httpGet:
+    path:/
+    port: 8080
+
+livenessProbe:
+  enabled: true 
+  initialDelaySeconds: 10 
+  periodSeconds: 10 
+  httpGet:
+     path: / 
+     port: 8080
+
+# This parameter is not required for IBM flows and should be set to false 
+configmap:
+   enabled: false
+
+# This section defines the amount of memory and cpu your application requires. 
+# The Requests will be used to determine which node to run the application on 
+# The Limits is the actual resource limit to be allocated to the appliction instance. These should be the same, unless reviewed by CAS 
+resources: 
+   limits:
+      cpu: 1
+      memory: 128Mi
+   requests:
+      cpu: 1 
+      memory: 128Mi
+
+# This section describes the service that will be used to route to your application within Kubernetes. 
+# This section DOES NOT impact routing to your service outside the platform 
+service:
+   port: 80
+   targetPort: 8080
+
+# This section describes the routing to your service from outside Kubernetes. 
+# For non blue-green, only one route (live) is required 
+# For blue-green, one live and one test are required 
+# Note: prod deployment will require blue-green 
+virtualServer:
+   enabled: true
+   vss:
+      # live route 
+      - type: live
+        host: 
+      # test route 
+      - type: test
+        host: 
+   clients:
+      # Below are examples of client host names, team can enable 
+      # these for testing purposes 
+      # - my-client-live.xx.org 
+      # - my-client-test.xx.org
+      # If non prod and service is exposed using APIGEE, than 
+      # team needs to add api-gtwy-np.kp.org client 
+      - api-gtwy-np.kp.org 
+      # If prod and service is exposed using APIGEE, than 
+      # team needs to add api-gtwy-prod.xx.org client 
+      # - api-gtwy-prod.xx.org
+
+hpa:
+   enabled: false 
+   min: 1 
+   max: 3
+   metrics: 
+       - type: Resource 
+         resource: 
+             name: memory 
+             targetAverageUtilization: 80
+
+# This is a generic section and can be ignored 
+nameOverride: ""
+fullnameOverride: ""
+node Selector: {} 
+tolerations: [] 
+affinity: {}
+
+
+
+
+
+
+
+
+
+

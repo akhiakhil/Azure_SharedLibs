@@ -1,0 +1,42 @@
+---
+- name: Check if '- live' and '-test' services are running 
+  block:
+    - name: Check for existing - live service
+      shell: kubectl --kubeconfig={{ cnoeaksconfig }} get svc | grep ^{{ appName }}-live | awk '{print $1}'
+      register: oldLiveSvc
+    - debug: var-oldLiveSvc
+
+    - name: Check for existing -test service
+      shell: kubectl --kubeconfig={{ cnoeaksconfig }} get svc | grep ^{{ appName }}-test | awk '{print $1}'
+      register: oldTestSvc
+    - debug: var-oldTestsvc
+
+- name: Save 'live' service spec to new file
+  shell: kubectl -- kubeconfig={{ cnoeaksconfig) get svc {{ oldLiveSvc.stdout }} -o yaml | sed -ne '/f:spec:/d' -ne '/spec:/,$ p' > rollbackSpec-{{env }}.yaml
+  when: oldLiveSvc.stdout !=""
+
+- name: Copy helm resource file to generic file name 
+  ansible.builtin.copy:
+  src: "{{ helmResourceFilename}}" 
+  dest: ./deployment.yaml
+
+- name: Create Green deployment using the generated manifest
+  block:
+   - name: 
+     community.kubernetes.k8s:
+       kubeconfig: "{{ cnoeaksconfig }}"
+       namespace: "{{ deployNamespace }}"
+       state: present
+       src: "deployment.yaml" 
+       wait: yes
+       wait_timeout: "{{ deployment_timeout }}"
+
+- name: Get Objects
+  shell: kubectl --kubeconfig={{ cnocaksconfig }} get all, vs 2>/dev/null | grep {{ appName}} | awk '{print $1}'| tr -d 'NAME' | xargs kubectl --kubeconfig={{ cnoeaksconfig }} get
+  register: objects 
+- debug: var=objects.stdout
+
+- name: Get Deployment Log 
+  Shell: kubectl --kubeconfig={{ cnoeaksconfig }}get po -o json | jq -r ' .items | sort_by(.metadata.creationTimestamp)[] | [.metadata.name] | @tsv' | grep {{ deploymentName}} | xargs kubectl --kubeconfig={( cnocaksconfig }} get po | awk '{print $1}' | tail -1 | xargs kubectl --kubeconfig={{ choeaksconfig }} logs > deployment.log
+
+

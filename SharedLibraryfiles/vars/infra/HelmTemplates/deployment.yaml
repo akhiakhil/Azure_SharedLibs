@@ -1,0 +1,113 @@
+  # Source: project-aks-helm/templates/deployment .yam1
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+ name: project-cloud4java-postgres-sample-0-0-1
+ labels:
+   app: project-cloud4java-postgres-sample-@-@-1
+   version: "8.0.1"
+   app.kubernetes.io/name: project-cloud4java~postgres-sample-@-0-1
+   app.kubernetes.io/instance: "0.0.1"
+   helm.sh/chart: "p-aks-helm-1.0.0"
+   app. kubernetes.io/managed-by-NUID: CAS
+
+spec:
+
+     replicas: 1
+     selector:
+        matchLabels
+        app: project-cloud4java-postgres-sample-0-@-1
+        version: "0.0.1
+        app.kubernetes.io/name: project-cloud4java-postgres-sample-0-0-1
+        app.kubernetes.io/instance: "0.2.1"
+        maistra.io/expose-route: "true"
+        app: frontend-or-api:
+    template:
+      metadata:
+        labels:
+           app:project-cloud4java-postgres-sample-0-@-1
+           version: "0.0.1
+           app.kubernetes.io/name: project-cloud4java-postgres-sample-0-@-1
+           app.kubernetes.io/instance: "0.0.1
+           maistra.io/expose-route: "true"
+           app: frontend-or-api
+        annotations:
+           Seccomp. security.alpha.kubernetes.io/pod: 'runtime/default'
+      spec:
+        containers:
+           -name: Client-cloud4java-postgres-sample-@-0-1
+            image: "docker-dev-local.devopsrepo"
+            imagePullPolicy: Always
+            env:
+            - name: postgres_user_a001
+              valueFrom:
+               secretKeyRef:
+                 key: postgres user_2001
+                 name: postgresseccreda@0l
+            - name: postgres_fadn_aee1
+              valueFrom:
+               secretKeyRef:
+                key: postgres user_2001
+                name: postgresseccreda@0l
+            - name: postgres_password_a@01
+              valueFrom:
+               secretKeyRef:
+                key: postgres user_2001
+                name: postgresseccreda@0l
+           - name: LOG_LEVEL
+             value: debug
+           - name: Client-config-cred-accesstoken 
+             valueFrom: 
+               secretKeyRef:
+                 key: KP_CONFIG_CRED_accessToken
+                 name: Client-cloud-config-sample 
+           - name: Client-config-cred-username
+             valueFrom: 
+               secretKeyRef:
+                 key: KP_CONFIG_CRED_configUser
+                 name: Client-cloud-config-sample
+           - name: Client-config-cred-password
+             valueFrom: 
+               secretKeyRef:
+                  key: KP_CONFIG_CRED_configPassword
+                  name: Client-cloud-config-sample 
+           - name: Client-config-cred-uri 
+               valueFrom: 
+                 secretKeyRef:
+                    key: KP_CONFIG_CRED_configURI
+                    name: Client-cloud-config-sample 
+           - name: KPCONFIG_NAME
+              value: Client-cloud-config-sample
+           - name: KPCONFIG_PROFILE
+             value: postgres-sample-dev
+           - name: KPCONFIG_LABEL
+             value: master
+ 
+          ports:
+           - name: http
+             containerPort: 8080
+             protocol: TCP 
+
+          volumeMounts:
+          resources: 
+            limits:
+              cpu: 400m
+              memory: 512Mi
+            requests:
+             cpu: 400m
+             memory: 512Mi 
+
+      volumes: 
+      affinity:
+         podAntiAffinity:
+             preferredDuringSchedulingIgnoredDuringExecution: 
+             - Weight: 1 
+               podAffinityTerm:
+               topologyKey: kubernetes.io/hostname
+               labelSelector: 
+               matchLabels:
+                  app.kubernetes.io/name: project-cloud4java-postgres-sample-0-0-1
+
+
+
+
